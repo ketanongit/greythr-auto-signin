@@ -107,52 +107,67 @@ def main():
         except Exception as e:
             print(f"⚠️  No immediate Sign In button found: {e}")
 
-        print("📍 Handling location selection...")
+        # Look for attendance sign-in on dashboard
+        print("🕒 Looking for attendance sign-in on dashboard...")
         try:
-            # Wait for location selection page
-            location_text = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'Tell us your work location') or contains(text(), 'work location')]"))
-            )
-            print("📍 Location selection page detected")
-            
-            # Find and click the dropdown
-            dropdown = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "select, .select, [role='combobox'], input[placeholder*='Select']"))
-            )
-            
-            if loc:
-                print(f"📍 Selecting location: {loc}")
-                # Try different methods to select location
-                try:
-                    Select(dropdown).select_by_visible_text(loc)
-                except:
-                    try:
-                        Select(dropdown).select_by_value(loc)
-                    except:
-                        # If it's not a select element, try clicking and selecting
-                        dropdown.click()
-                        time.sleep(1)
-                        location_option = driver.find_element(By.XPATH, f"//*[contains(text(), '{loc}')]")
-                        location_option.click()
-            else:
-                print("📍 No specific location provided, selecting first available option")
-                # Select first available option (usually "Office" or "Work from Home")
-                select_obj = Select(dropdown)
-                options = select_obj.options
-                if len(options) > 1:  # Skip the default "Select" option
-                    select_obj.select_by_index(1)
-            
-            time.sleep(2)
-            
-            # Click the Sign In button after location selection
-            location_signin = find_button_by_text(driver, "Sign In")
-            location_signin.click()
+            # Wait a bit for dashboard to load completely
             time.sleep(3)
-            print("✅ Location selected and signed in")
             
+            # Look for attendance sign-in button (the blue button in the date section)
+            attendance_signin_selectors = [
+                "//button[contains(text(), 'Sign In')]",
+                "//button[contains(@class, 'sign') and contains(text(), 'Sign')]",
+                "//*[contains(@class, 'attendance')]//button[contains(text(), 'Sign In')]",
+                "//*[contains(text(), '31 August 2025')]//following::button[contains(text(), 'Sign In')]",
+                "//button[@class and contains(text(), 'Sign In')]"
+            ]
+            
+            attendance_button = None
+            for selector in attendance_signin_selectors:
+                try:
+                    attendance_button = WebDriverWait(driver, 5).until(
+                        EC.element_to_be_clickable((By.XPATH, selector))
+                    )
+                    print(f"📍 Found attendance sign-in button with selector: {selector}")
+                    break
+                except:
+                    continue
+            
+            if attendance_button:
+                print("🕒 Clicking attendance sign-in button...")
+                attendance_button.click()
+                time.sleep(3)
+                
+                # After clicking, check if location selection appears
+                try:
+                    location_dropdown = WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "select, .dropdown, [role='combobox']"))
+                    )
+                    print("📍 Location selection appeared after attendance sign-in")
+                    
+                    if loc:
+                        print(f"📍 Selecting location: {loc}")
+                        Select(location_dropdown).select_by_visible_text(loc)
+                    else:
+                        print("📍 No location specified, selecting first option")
+                        Select(location_dropdown).select_by_index(1)
+                    
+                    time.sleep(2)
+                    
+                    # Final sign-in after location selection
+                    final_signin = find_button_by_text(driver, "Sign In")
+                    final_signin.click()
+                    time.sleep(3)
+                    print("✅ Completed location selection and final sign-in")
+                    
+                except Exception as loc_e:
+                    print(f"⚠️  No location selection needed after attendance sign-in: {loc_e}")
+                
+            else:
+                print("⚠️  No attendance sign-in button found on dashboard")
+                
         except Exception as e:
-            print(f"⚠️  Location selection step not found or failed: {e}")
-            # This might be normal if location selection isn't required
+            print(f"⚠️  Dashboard attendance sign-in failed: {e}")
 
         # Final verification with more detailed checking
         time.sleep(5)
