@@ -2,14 +2,14 @@ name: GreytHR Auto Sign-In
 
 on:
   schedule:
-    # 3:30 AM UTC = 9:00 AM IST, Monday to Saturday
+    # 3:30 AM UTC = 9:00 AM IST, Monday to Saturday  
     - cron: '30 3 * * 1-6'
   workflow_dispatch:
     inputs:
       debug_mode:
         description: 'Enable debug mode for testing'
         required: false
-        default: 'false'
+        default: 'true'
         type: choice
         options:
         - 'true'
