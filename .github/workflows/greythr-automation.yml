@@ -22,16 +22,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-node@v4
         with:
-          python-version: '3.11'
+          node-version: '18'
 
-      - name: Install Chromium & Chromedriver
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y chromium-browser chromium-chromedriver
-
-      - run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: npm install
 
       - name: Run GreytHR Automation
         env:
@@ -41,7 +37,7 @@ jobs:
           SIGNIN_LOCATION: ${{ secrets.SIGNIN_LOCATION }}
           DEBUG_MODE: ${{ github.event.inputs.debug_mode || 'false' }}
           MANUAL_RUN: ${{ github.event_name == 'workflow_dispatch' }}
-        run: python greythr_automation.py
+        run: node greythr_automation.js
 
       - name: Upload debug artifacts (if debug mode)
         if: always() && github.event.inputs.debug_mode == 'true'
@@ -49,8 +45,9 @@ jobs:
         with:
           name: debug-files
           path: |
-            /tmp/error_screenshot.png
-            /tmp/final_page_source.html
+            error_screenshot.png
+            final_screenshot.png
+            page_source.html
           retention-days: 1
 
       - if: failure()
