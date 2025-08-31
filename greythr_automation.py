@@ -78,47 +78,93 @@ def main():
         login_btn.click()
         time.sleep(5)
 
-        print("✅ Attempting to sign in...")
+        print("🔍 Checking for immediate sign-in requirement...")
         try:
-            sign_in = find_button_by_text(driver, "Sign In")
+            # Check if we need to click Sign In immediately after login
+            sign_in = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
+            )
+            print("✅ Found immediate Sign In button, clicking...")
             sign_in.click()
             time.sleep(3)
         except Exception as e:
-            print(f"⚠️  Sign In button not found or not needed: {e}")
+            print(f"⚠️  No immediate Sign In button found: {e}")
 
-        if loc:
-            print(f"📍 Selecting location: {loc}")
-            try:
-                dropdown = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "select"))
-                )
-                Select(dropdown).select_by_visible_text(loc)
-                time.sleep(1)
-                
-                confirm = find_button_by_text(driver, "Sign In")
-                confirm.click()
-                time.sleep(2)
-            except Exception as e:
-                print(f"⚠️  Location selection failed: {e}")
+        print("📍 Handling location selection...")
+        try:
+            # Wait for location selection page
+            location_text = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'Tell us your work location') or contains(text(), 'work location')]"))
+            )
+            print("📍 Location selection page detected")
+            
+            # Find and click the dropdown
+            dropdown = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "select, .select, [role='combobox'], input[placeholder*='Select']"))
+            )
+            
+            if loc:
+                print(f"📍 Selecting location: {loc}")
+                # Try different methods to select location
+                try:
+                    Select(dropdown).select_by_visible_text(loc)
+                except:
+                    try:
+                        Select(dropdown).select_by_value(loc)
+                    except:
+                        # If it's not a select element, try clicking and selecting
+                        dropdown.click()
+                        time.sleep(1)
+                        location_option = driver.find_element(By.XPATH, f"//*[contains(text(), '{loc}')]")
+                        location_option.click()
+            else:
+                print("📍 No specific location provided, selecting first available option")
+                # Select first available option (usually "Office" or "Work from Home")
+                select_obj = Select(dropdown)
+                options = select_obj.options
+                if len(options) > 1:  # Skip the default "Select" option
+                    select_obj.select_by_index(1)
+            
+            time.sleep(2)
+            
+            # Click the Sign In button after location selection
+            location_signin = find_button_by_text(driver, "Sign In")
+            location_signin.click()
+            time.sleep(3)
+            print("✅ Location selected and signed in")
+            
+        except Exception as e:
+            print(f"⚠️  Location selection step not found or failed: {e}")
+            # This might be normal if location selection isn't required
 
-        # Verify successful login
-        time.sleep(3)
+        # Final verification
+        time.sleep(5)
         current_url = driver.current_url
-        print(f"🌐 Current URL: {current_url}")
+        page_source = driver.page_source.lower()
+        print(f"🌐 Final URL: {current_url}")
         
-        # Check for common success indicators
+        # Check for success indicators
         success_indicators = [
-            "dashboard", "home", "employee", "profile", "attendance"
+            "dashboard", "home", "employee", "profile", "attendance", "worklife"
+        ]
+        
+        failure_indicators = [
+            "login", "signin", "sign-in", "tell us your work location", "not signed in"
         ]
         
         if any(indicator in current_url.lower() for indicator in success_indicators):
-            print("✅ Login appears successful!")
+            print("✅ Login successful - reached dashboard!")
+        elif any(indicator in page_source for indicator in failure_indicators):
+            print("❌ Login incomplete - still on login/location page")
+            # Try to find what's still needed
+            if "tell us your work location" in page_source:
+                print("🔍 Location selection still required")
+            elif "not signed in" in page_source:
+                print("🔍 Sign-in step still pending")
+        elif "good afternoon" in page_source or "good morning" in page_source or "good evening" in page_source:
+            print("✅ Login successful - greeting detected!")
         else:
-            # Check if we're still on login page
-            if "login" in current_url.lower() or "signin" in current_url.lower():
-                print("❌ Still on login page - login may have failed")
-            else:
-                print("✅ Automation completed successfully!")
+            print("✅ Automation completed - final status unclear")
 
     except Exception as e:
         print(f"❌ Automation failed: {e}")
