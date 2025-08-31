@@ -39,37 +39,77 @@ def handle_location_modal(driver, location):
         )
         print("📍 Location modal detected!")
         
-        # Try to find and fill the location field
+        # Handle the dropdown selection first
         try:
-            # Look for textarea or input field in the modal
+            # Look for gt-dropdown element
+            dropdown = driver.find_element(By.CSS_SELECTOR, "gt-dropdown")
+            if dropdown:
+                print("📋 Found location dropdown")
+                # Click on the dropdown to open it
+                driver.execute_script("arguments[0].click();", dropdown)
+                time.sleep(1)
+                
+                # Try to select the first available option or specific location
+                try:
+                    # Look for dropdown options
+                    options = driver.find_elements(By.CSS_SELECTOR, "gt-dropdown option, .dropdown-item, [role='option']")
+                    if options:
+                        # Select the location if specified, otherwise first option
+                        selected = False
+                        for option in options:
+                            option_text = option.text.strip()
+                            if location and location.lower() in option_text.lower():
+                                driver.execute_script("arguments[0].click();", option)
+                                print(f"📍 Selected location: {option_text}")
+                                selected = True
+                                break
+                        
+                        if not selected and options:
+                            # Select first available option
+                            driver.execute_script("arguments[0].click();", options[0])
+                            print(f"📍 Selected first available location: {options[0].text}")
+                    else:
+                        # Try clicking the dropdown and typing the location
+                        driver.execute_script("arguments[0].value = arguments[1];", dropdown, location if location else "Office")
+                        print(f"📍 Set dropdown value to: {location if location else 'Office'}")
+                except Exception as e:
+                    print(f"⚠️ Could not select from dropdown: {e}")
+        except Exception as e:
+            print(f"⚠️ Could not find location dropdown: {e}")
+        
+        # Also try to fill the textarea if present (for reason/comments)
+        try:
             textarea = driver.find_element(By.CSS_SELECTOR, "gt-text-area textarea, textarea")
             textarea.clear()
-            textarea.send_keys(location if location else "Office")
-            print(f"📝 Entered location: {location if location else 'Office'}")
+            textarea.send_keys("Working from office")
+            print("📝 Entered reason in textarea")
         except:
-            print("⚠️ Could not find location input field")
+            pass
         
         # Look for submit/confirm button in the modal
+        time.sleep(1)
         try:
             # Try multiple selectors for the submit button
             submit_selectors = [
+                "gt-popup-modal gt-button[shade='primary']",
                 "gt-button[shade='primary']",
-                "button:contains('Submit')",
-                "button:contains('Confirm')",
-                "button:contains('Sign In')",
-                ".hydrated[shade='primary']"
+                "//gt-button[@shade='primary']",
+                "//button[contains(text(), 'Sign In')]",
+                "//button[contains(text(), 'Submit')]",
+                "//button[contains(text(), 'Confirm')]"
             ]
             
             for selector in submit_selectors:
                 try:
-                    if ':contains' in selector:
-                        # Use XPath for text-based selection
-                        xpath = f"//button[contains(text(), '{selector.split('contains')[1][2:-2]}')]"
-                        btn = driver.find_element(By.XPATH, xpath)
+                    if selector.startswith("//"):
+                        btn = driver.find_element(By.XPATH, selector)
                     else:
                         btn = driver.find_element(By.CSS_SELECTOR, selector)
                     
-                    if btn.is_displayed() and btn.is_enabled():
+                    if btn.is_displayed():
+                        print(f"🎯 Found submit button, clicking...")
+                        driver.execute_script("arguments[0].scrollIntoView(true);", btn)
+                        time.sleep(0.5)
                         driver.execute_script("arguments[0].click();", btn)
                         print(f"✅ Clicked modal submit button")
                         time.sleep(3)
@@ -91,15 +131,19 @@ def find_and_click_signin(driver):
     """Find and click the sign-in button on the home page"""
     print("\n🔍 Looking for sign-in button on home page...")
     
+    # Wait a moment for any animations to complete
+    time.sleep(2)
+    
     # Strategy 1: Look for the attendance widget button
     try:
         # The attendance widget shows a button with primary shade
         attendance_button = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "gt-attendance-info gt-button[shade='primary']"))
+            EC.presence_of_element_located((By.CSS_SELECTOR, "gt-attendance-info gt-button[shade='primary']"))
         )
         print("✅ Found attendance widget button!")
         driver.execute_script("arguments[0].scrollIntoView(true);", attendance_button)
         time.sleep(1)
+        # Use JavaScript click to bypass any overlays
         driver.execute_script("arguments[0].click();", attendance_button)
         print("🎯 Clicked attendance sign-in button!")
         return True
