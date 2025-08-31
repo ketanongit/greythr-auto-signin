@@ -39,98 +39,132 @@ def handle_location_modal(driver, location):
         )
         print("📍 Location modal detected!")
         
-        # Handle the dropdown selection
+        # Handle the custom gt-dropdown
         try:
-            # Look for the select element or dropdown
-            dropdown_selectors = [
-                "select",  # Standard select element
-                "gt-dropdown select",
-                ".gt-dropdown select",
-                "input[placeholder*='Select']"
-            ]
+            # First, try to find the gt-dropdown element
+            gt_dropdown = driver.find_element(By.CSS_SELECTOR, "gt-dropdown")
+            print("📋 Found gt-dropdown element")
             
-            dropdown_found = False
-            for selector in dropdown_selectors:
-                try:
-                    dropdown = driver.find_element(By.CSS_SELECTOR, selector)
-                    if dropdown:
-                        print(f"📋 Found location dropdown with selector: {selector}")
-                        dropdown_found = True
-                        
-                        # Click to open dropdown
-                        driver.execute_script("arguments[0].click();", dropdown)
-                        time.sleep(1)
-                        
-                        # Try to find and click the "Office" option
-                        option_selectors = [
-                            "//option[contains(text(), 'Office')]",
-                            "//div[contains(text(), 'Office')]",
-                            "//li[contains(text(), 'Office')]",
-                            "//*[@role='option'][contains(text(), 'Office')]"
-                        ]
-                        
-                        option_clicked = False
-                        for opt_selector in option_selectors:
-                            try:
-                                office_option = driver.find_element(By.XPATH, opt_selector)
-                                if office_option.is_displayed():
-                                    driver.execute_script("arguments[0].click();", office_option)
-                                    print("📍 Selected 'Office' location")
-                                    option_clicked = True
-                                    break
-                            except:
-                                continue
-                        
-                        # If clicking didn't work, try setting value directly
-                        if not option_clicked:
-                            try:
-                                # For select elements, set value directly
-                                driver.execute_script("""
-                                    var select = arguments[0];
-                                    for(var i = 0; i < select.options.length; i++) {
-                                        if(select.options[i].text.includes('Office')) {
-                                            select.selectedIndex = i;
-                                            select.dispatchEvent(new Event('change', { bubbles: true }));
-                                            break;
-                                        }
-                                    }
-                                """, dropdown)
-                                print("📍 Set dropdown to 'Office' via JavaScript")
-                            except:
-                                print("⚠️ Could not select Office option")
-                        
-                        break
-                except:
-                    continue
+            # Click on the dropdown button to open it
+            dropdown_button = gt_dropdown.find_element(By.CSS_SELECTOR, "button.dropdown-button")
+            print("🖱️ Found dropdown button, clicking to open...")
+            driver.execute_script("arguments[0].click();", dropdown_button)
+            time.sleep(2)  # Wait for dropdown to open
             
-            if not dropdown_found:
-                print("⚠️ No dropdown found with any selector")
+            # Now look for the dropdown items container
+            dropdown_container = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "gt-dropdown .dropdown-container"))
+            )
+            print("📂 Dropdown container is now visible")
+            
+            # Find all dropdown items
+            dropdown_items = dropdown_container.find_elements(By.CSS_SELECTOR, ".dropdown-item")
+            print(f"📝 Found {len(dropdown_items)} dropdown options")
+            
+            # Look for the "Office" option
+            office_clicked = False
+            for item in dropdown_items:
+                item_text = item.get_attribute('innerText') or item.text or ''
+                item_label = item.find_elements(By.CSS_SELECTOR, ".item-label")
+                if item_label:
+                    item_text = item_label[0].text
                 
-        except Exception as e:
-            print(f"⚠️ Error handling dropdown: {e}")
+                print(f"📋 Checking item: '{item_text}'")
+                
+                if 'office' in item_text.lower():
+                    print(f"✅ Found Office option: '{item_text}', clicking...")
+                    driver.execute_script("arguments[0].click();", item)
+                    office_clicked = True
+                    time.sleep(2)
+                    break
+            
+            if not office_clicked:
+                print("⚠️ Could not find 'Office' option, trying second available option...")
+                if dropdown_items:
+                    second_item = dropdown_items[1]
+                    second_text = second_item.get_attribute('innerText') or second_item.text or 'second Option'
+                    print(f"📋 Clicking second option: '{second_text}'")
+                    driver.execute_script("arguments[0].click();", second_item)
+                    time.sleep(2)
+                
+        except Exception as dropdown_error:
+            print(f"⚠️ Error handling gt-dropdown: {dropdown_error}")
+            
+            # Fallback: Try to interact with the dropdown using JavaScript
+            try:
+                print("🔄 Trying JavaScript fallback for dropdown...")
+                driver.execute_script("""
+                    // Find the gt-dropdown element
+                    var dropdown = document.querySelector('gt-dropdown');
+                    if (dropdown) {
+                        // Try to open it
+                        var button = dropdown.querySelector('button');
+                        if (button) {
+                            button.click();
+                            
+                            // Wait a bit for options to appear
+                            setTimeout(function() {
+                                // Look for Office option
+                                var items = dropdown.querySelectorAll('.dropdown-item');
+                                for (var i = 0; i < items.length; i++) {
+                                    var text = items[i].textContent || items[i].innerText;
+                                    if (text && text.toLowerCase().includes('office')) {
+                                        items[i].click();
+                                        console.log('Clicked Office option via JS');
+                                        return;
+                                    }
+                                }
+                                // If no Office found, click second item
+                                if (items.length > 0) {
+                                    items[0].click();
+                                    console.log('Clicked second option via JS');
+                                }
+                            }, 1000);
+                        }
+                    }
+                """)
+                time.sleep(3)
+                print("✅ JavaScript dropdown interaction completed")
+            except Exception as js_error:
+                print(f"⚠️ JavaScript fallback also failed: {js_error}")
         
         # Also try to fill the textarea if present (for reason/comments)
         try:
-            textarea = driver.find_element(By.CSS_SELECTOR, "gt-text-area textarea, textarea")
-            textarea.clear()
-            textarea.send_keys("Working from office")
-            print("📝 Entered reason in textarea")
-        except:
-            pass
+            textarea_selectors = [
+                "gt-text-area textarea",
+                "textarea",
+                "gt-popup-modal textarea",
+                ".modal textarea"
+            ]
+            
+            for selector in textarea_selectors:
+                try:
+                    textarea = driver.find_element(By.CSS_SELECTOR, selector)
+                    if textarea.is_displayed():
+                        textarea.clear()
+                        textarea.send_keys("Working from office")
+                        print("📝 Entered reason in textarea")
+                        break
+                except:
+                    continue
+        except Exception as textarea_error:
+            print(f"⚠️ Could not find textarea: {textarea_error}")
         
         # Look for submit/confirm button in the modal
         time.sleep(2)  # Give time for dropdown selection to register
         try:
             # Try multiple selectors for the submit button
             submit_selectors = [
+                "gt-button[shade='primary']",
+                "button[shade='primary']", 
+                ".hydrated[shade='primary']",
+                "gt-popup-modal gt-button",
                 "//button[contains(text(), 'Sign In')]",
                 "//gt-button[contains(text(), 'Sign In')]",
-                "gt-popup-modal gt-button[shade='primary']",
-                "gt-button[shade='primary']",
-                ".hydrated[shade='primary']",
                 "//button[contains(@class, 'primary')]",
                 "//button[contains(text(), 'Submit')]",
-                "//button[contains(text(), 'Confirm')]"
+                "//button[contains(text(), 'Confirm')]",
+                "//button[contains(text(), 'Continue')]"
             ]
             
             button_clicked = False
@@ -141,10 +175,9 @@ def handle_location_modal(driver, location):
                     else:
                         btn = driver.find_element(By.CSS_SELECTOR, selector)
                     
-                    # Check if button is visible and has text
-                    btn_text = btn.text.strip() if hasattr(btn, 'text') else ""
-                    
-                    if btn.is_displayed():
+                    # Check if button is visible
+                    if btn.is_displayed() and btn.is_enabled():
+                        btn_text = btn.get_attribute('innerText') or btn.text or btn.get_attribute('name') or 'Button'
                         print(f"🎯 Found button: '{btn_text}', clicking...")
                         driver.execute_script("arguments[0].scrollIntoView(true);", btn)
                         time.sleep(0.5)
@@ -159,13 +192,26 @@ def handle_location_modal(driver, location):
                         button_clicked = True
                         time.sleep(3)
                         break
-                except:
+                except Exception as btn_error:
                     continue
             
             if button_clicked:
                 return True
             else:
                 print("⚠️ Could not find any submit button")
+                # Try clicking any visible button as last resort
+                try:
+                    all_buttons = driver.find_elements(By.CSS_SELECTOR, "button, gt-button")
+                    for btn in all_buttons:
+                        if btn.is_displayed() and btn.is_enabled():
+                            btn_text = btn.get_attribute('innerText') or btn.text or 'Unknown'
+                            if btn_text.strip() and len(btn_text.strip()) > 0:
+                                print(f"🔄 Trying button: '{btn_text}'")
+                                driver.execute_script("arguments[0].click();", btn)
+                                time.sleep(2)
+                                return True
+                except:
+                    pass
                 return False
                     
         except Exception as e:
@@ -189,16 +235,29 @@ def find_and_click_signin(driver):
     # Strategy 1: Look for the attendance widget button
     try:
         # The attendance widget shows a button with primary shade
-        attendance_button = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "gt-attendance-info gt-button[shade='primary']"))
-        )
-        print("✅ Found attendance widget button!")
-        driver.execute_script("arguments[0].scrollIntoView(true);", attendance_button)
-        time.sleep(1)
-        # Use JavaScript click to bypass any overlays
-        driver.execute_script("arguments[0].click();", attendance_button)
-        print("🎯 Clicked attendance sign-in button!")
-        return True
+        attendance_selectors = [
+            "gt-attendance-info gt-button[shade='primary']",
+            "gt-attendance-info gt-button",
+            ".attendance-widget gt-button",
+            "gt-button[shade='primary']"
+        ]
+        
+        for selector in attendance_selectors:
+            try:
+                attendance_button = WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                )
+                if attendance_button.is_displayed():
+                    print(f"✅ Found attendance widget button with selector: {selector}")
+                    driver.execute_script("arguments[0].scrollIntoView(true);", attendance_button)
+                    time.sleep(1)
+                    # Use JavaScript click to bypass any overlays
+                    driver.execute_script("arguments[0].click();", attendance_button)
+                    print("🎯 Clicked attendance sign-in button!")
+                    return True
+            except:
+                continue
+                
     except Exception as e:
         print(f"⚠️ Could not find attendance widget button: {e}")
     
