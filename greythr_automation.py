@@ -28,283 +28,300 @@ def setup_driver():
     driver.set_page_load_timeout(30)
     return driver
 
-def handle_location_modal(driver, location):
-    """Handle the location selection modal if it appears"""
-    print("🗺️ Checking for location modal...")
+def complete_signin_process(driver):
+    """Complete the entire sign-in process using JavaScript"""
+    print("🚀 Starting complete sign-in process with JavaScript...")
     
-    try:
-        # Look for the modal with "Tell us your work location" text
-        modal_text = WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'Tell us your work location')]"))
-        )
-        print("📍 Location modal detected!")
+    result = driver.execute_script("""
+        // Complete GreytHR sign-in automation
+        var results = [];
+        var stepCount = 0;
         
-        # Use JavaScript-first approach since it's working better
-        try:
-            print("🔄 Using JavaScript to handle dropdown...")
-            result = driver.execute_script("""
-                // Enhanced JavaScript dropdown handler
-                var dropdown = document.querySelector('gt-dropdown');
-                if (!dropdown) {
-                    return 'No gt-dropdown found';
+        function logStep(message) {
+            stepCount++;
+            results.push(stepCount + '. ' + message);
+            console.log(message);
+        }
+        
+        function findAndClickElement(selectors, description) {
+            for (var i = 0; i < selectors.length; i++) {
+                var elements = document.querySelectorAll(selectors[i]);
+                for (var j = 0; j < elements.length; j++) {
+                    var el = elements[j];
+                    if (el.offsetParent !== null) { // Check if visible
+                        logStep('Found ' + description + ' with selector: ' + selectors[i]);
+                        el.click();
+                        return true;
+                    }
                 }
-                
-                console.log('Found gt-dropdown element');
-                
-                // Try multiple button selectors
-                var buttonSelectors = ['button', '.dropdown-button', '[role="button"]'];
-                var button = null;
-                
-                for (var i = 0; i < buttonSelectors.length; i++) {
-                    button = dropdown.querySelector(buttonSelectors[i]);
-                    if (button) break;
+            }
+            return false;
+        }
+        
+        function handleLocationModal() {
+            // Check if location modal is present
+            var modalTexts = document.querySelectorAll('*');
+            var hasModal = false;
+            
+            for (var i = 0; i < modalTexts.length; i++) {
+                if (modalTexts[i].textContent && modalTexts[i].textContent.includes('Tell us your work location')) {
+                    hasModal = true;
+                    break;
                 }
-                
-                if (!button) {
-                    return 'No dropdown button found';
-                }
-                
-                console.log('Found dropdown button, clicking...');
-                button.click();
-                
-                // Wait for dropdown to open and try to select option
-                return new Promise((resolve) => {
-                    setTimeout(() => {
-                        // Look for dropdown items with multiple selectors
-                        var itemSelectors = [
-                            '.dropdown-item',
-                            '.dropdown-option', 
-                            '[role="option"]',
-                            'div[class*="item"]',
-                            'li'
-                        ];
+            }
+            
+            if (!hasModal) {
+                logStep('No location modal detected');
+                return false;
+            }
+            
+            logStep('Location modal detected');
+            
+            // Try to find and handle dropdown - multiple approaches
+            var dropdownHandled = false;
+            
+            // Approach 1: Look for any dropdown/select elements
+            var dropdownSelectors = [
+                'gt-dropdown',
+                'select',
+                '[role="combobox"]',
+                '[role="listbox"]',
+                '.dropdown',
+                '.select'
+            ];
+            
+            for (var i = 0; i < dropdownSelectors.length; i++) {
+                var dropdowns = document.querySelectorAll(dropdownSelectors[i]);
+                for (var j = 0; j < dropdowns.length; j++) {
+                    var dropdown = dropdowns[j];
+                    if (dropdown.offsetParent !== null) {
+                        logStep('Found dropdown with selector: ' + dropdownSelectors[i]);
                         
-                        var items = [];
-                        for (var i = 0; i < itemSelectors.length; i++) {
-                            var found = document.querySelectorAll(itemSelectors[i]);
-                            if (found.length > 0) {
-                                items = Array.from(found);
-                                console.log('Found items with selector: ' + itemSelectors[i]);
-                                break;
-                            }
-                        }
-                        
-                        if (items.length === 0) {
-                            resolve('No dropdown items found');
-                            return;
-                        }
-                        
-                        console.log('Found ' + items.length + ' dropdown items');
-                        
-                        // Try to find and click Office option
-                        var officeClicked = false;
-                        for (var i = 0; i < items.length; i++) {
-                            var text = items[i].textContent || items[i].innerText || '';
-                            console.log('Checking item: ' + text);
+                        // Try to click it to open
+                        var button = dropdown.querySelector('button, [role="button"], .dropdown-toggle');
+                        if (button) {
+                            button.click();
+                            logStep('Clicked dropdown button');
                             
-                            if (text.toLowerCase().includes('office')) {
-                                items[i].click();
-                                console.log('Clicked Office option: ' + text);
-                                officeClicked = true;
-                                resolve('Office option selected');
-                                return;
-                            }
+                            // Wait for options to appear
+                            setTimeout(function() {
+                                // Look for office option
+                                var optionSelectors = [
+                                    '[role="option"]',
+                                    '.dropdown-item',
+                                    '.option',
+                                    'li',
+                                    'div[class*="item"]'
+                                ];
+                                
+                                for (var k = 0; k < optionSelectors.length; k++) {
+                                    var options = document.querySelectorAll(optionSelectors[k]);
+                                    for (var l = 0; l < options.length; l++) {
+                                        var optionText = options[l].textContent || options[l].innerText || '';
+                                        if (optionText.toLowerCase().includes('office')) {
+                                            options[l].click();
+                                            logStep('Selected Office option: ' + optionText);
+                                            dropdownHandled = true;
+                                            return;
+                                        }
+                                    }
+                                }
+                                
+                                // If no office found, try first option
+                                if (options.length > 0) {
+                                    options[0].click();
+                                    logStep('Selected first option as fallback');
+                                    dropdownHandled = true;
+                                }
+                            }, 1500);
+                            
+                            return true;
                         }
+                    }
+                }
+            }
+            
+            // Approach 2: Direct text-based selection
+            if (!dropdownHandled) {
+                var allElements = document.querySelectorAll('*');
+                for (var i = 0; i < allElements.length; i++) {
+                    var el = allElements[i];
+                    var text = el.textContent || el.innerText || '';
+                    if (text === 'Office' && el.offsetParent !== null) {
+                        logStep('Found Office text element, clicking directly');
+                        el.click();
+                        dropdownHandled = true;
+                        break;
+                    }
+                }
+            }
+            
+            return dropdownHandled;
+        }
+        
+        function clickSignInButton() {
+            // Look for sign-in buttons
+            var signInSelectors = [
+                'gt-button[shade="primary"]',
+                'button[shade="primary"]',
+                '.btn-primary',
+                'button:contains("Sign In")',
+                '[role="button"]:contains("Sign In")'
+            ];
+            
+            var buttonClicked = false;
+            
+            for (var i = 0; i < signInSelectors.length; i++) {
+                var buttons = document.querySelectorAll(signInSelectors[i]);
+                for (var j = 0; j < buttons.length; j++) {
+                    var btn = buttons[j];
+                    var btnText = btn.textContent || btn.innerText || btn.getAttribute('name') || '';
+                    
+                    if (btn.offsetParent !== null && 
+                        (btnText.toLowerCase().includes('sign') || 
+                         btnText.toLowerCase().includes('submit') || 
+                         btnText.toLowerCase().includes('continue'))) {
                         
-                        // If Office not found, click first item
-                        if (!officeClicked && items.length > 0) {
-                            var firstText = items[0].textContent || items[0].innerText || 'First option';
-                            items[0].click();
-                            console.log('Clicked first option: ' + firstText);
-                            resolve('First option selected: ' + firstText);
-                        } else {
-                            resolve('No suitable option found');
-                        }
+                        logStep('Clicking button: ' + btnText);
+                        btn.click();
+                        buttonClicked = true;
+                        return true;
+                    }
+                }
+            }
+            
+            return buttonClicked;
+        }
+        
+        // Main execution flow
+        logStep('Starting JavaScript automation');
+        
+        // Handle location modal if present
+        handleLocationModal();
+        
+        // Wait a bit for any changes
+        setTimeout(function() {
+            // Click sign-in button
+            var signInClicked = clickSignInButton();
+            if (signInClicked) {
+                logStep('Sign-in button clicked');
+                
+                // Wait and handle modal again if needed
+                setTimeout(function() {
+                    handleLocationModal();
+                    
+                    // Final sign-in attempt
+                    setTimeout(function() {
+                        clickSignInButton();
+                        logStep('Final sign-in attempt completed');
                     }, 2000);
-                });
-            """)
-            
-            time.sleep(4)  # Wait for JavaScript promise to resolve
-            print(f"✅ JavaScript dropdown result: {result}")
-                
-        except Exception as js_error:
-            print(f"⚠️ JavaScript dropdown handling failed: {js_error}")
-            
-            # Last resort: Try to find any clickable elements in the modal
-            try:
-                print("🔄 Last resort: looking for any clickable elements...")
-                clickable_elements = driver.find_elements(By.CSS_SELECTOR, "button, div[role='button'], span[role='button'], [onclick], [role='option']")
-                
-                for element in clickable_elements:
-                    element_text = element.get_attribute('innerText') or element.text or ''
-                    if element.is_displayed() and 'office' in element_text.lower():
-                        print(f"🎯 Found clickable Office element: '{element_text}'")
-                        driver.execute_script("arguments[0].click();", element)
-                        time.sleep(2)
-                        break
-            except Exception as last_resort_error:
-                print(f"⚠️ Last resort approach failed: {last_resort_error}")
+                }, 3000);
+            } else {
+                logStep('No sign-in button found');
+            }
+        }, 2000);
         
-        # Also try to fill the textarea if present (for reason/comments)
-        try:
-            textarea_selectors = [
-                "gt-text-area textarea",
-                "textarea",
-                "gt-popup-modal textarea",
-                ".modal textarea"
-            ]
-            
-            for selector in textarea_selectors:
-                try:
-                    textarea = driver.find_element(By.CSS_SELECTOR, selector)
-                    if textarea.is_displayed():
-                        textarea.clear()
-                        textarea.send_keys("Working from office")
-                        print("📝 Entered reason in textarea")
-                        break
-                except:
-                    continue
-        except Exception as textarea_error:
-            print(f"⚠️ Could not find textarea: {textarea_error}")
-        
-        # Look for submit/confirm button in the modal
-        time.sleep(2)  # Give time for dropdown selection to register
-        try:
-            # Try multiple selectors for the submit button
-            submit_selectors = [
-                "gt-button[shade='primary']",
-                "button[shade='primary']", 
-                ".hydrated[shade='primary']",
-                "gt-popup-modal gt-button",
-                "//button[contains(text(), 'Sign In')]",
-                "//gt-button[contains(text(), 'Sign In')]",
-                "//button[contains(@class, 'primary')]",
-                "//button[contains(text(), 'Submit')]",
-                "//button[contains(text(), 'Confirm')]",
-                "//button[contains(text(), 'Continue')]"
-            ]
-            
-            button_clicked = False
-            for selector in submit_selectors:
-                try:
-                    if selector.startswith("//"):
-                        btn = driver.find_element(By.XPATH, selector)
-                    else:
-                        btn = driver.find_element(By.CSS_SELECTOR, selector)
-                    
-                    # Check if button is visible
-                    if btn.is_displayed() and btn.is_enabled():
-                        btn_text = btn.get_attribute('innerText') or btn.text or btn.get_attribute('name') or 'Button'
-                        print(f"🎯 Found button: '{btn_text}', clicking...")
-                        driver.execute_script("arguments[0].scrollIntoView(true);", btn)
-                        time.sleep(0.5)
-                        
-                        # Try different click methods
-                        try:
-                            driver.execute_script("arguments[0].click();", btn)
-                        except:
-                            btn.click()
-                            
-                        print(f"✅ Clicked button: '{btn_text}'")
-                        button_clicked = True
-                        time.sleep(3)
-                        break
-                except Exception as btn_error:
-                    continue
-            
-            if button_clicked:
-                return True
-            else:
-                print("⚠️ Could not find any submit button")
-                # Try clicking any visible button as last resort
-                try:
-                    all_buttons = driver.find_elements(By.CSS_SELECTOR, "button, gt-button")
-                    for btn in all_buttons:
-                        if btn.is_displayed() and btn.is_enabled():
-                            btn_text = btn.get_attribute('innerText') or btn.text or 'Unknown'
-                            if btn_text.strip() and len(btn_text.strip()) > 0:
-                                print(f"🔄 Trying button: '{btn_text}'")
-                                driver.execute_script("arguments[0].click();", btn)
-                                time.sleep(2)
-                                return True
-                except:
-                    pass
-                return False
-                    
-        except Exception as e:
-            print(f"⚠️ Error clicking submit button: {e}")
-            return False
-            
-    except TimeoutException:
-        print("ℹ️ No location modal detected")
-    except Exception as e:
-        print(f"⚠️ Error handling location modal: {e}")
+        return results.join('\\n');
+    """)
     
-    return False
+    time.sleep(10)  # Give time for all JavaScript operations to complete
+    print(f"📋 JavaScript execution log:\n{result}")
+    
+    return result
 
-def find_and_click_signin(driver):
-    """Find and click the sign-in button on the home page"""
-    print("\n🔍 Looking for sign-in button on home page...")
+def handle_location_modal_selenium_fallback(driver, location):
+    """Selenium fallback for location modal"""
+    print("🔄 Using Selenium fallback for location modal...")
     
-    # Wait a moment for any animations to complete
-    time.sleep(2)
-    
-    # Strategy 1: Look for the attendance widget button
     try:
-        # The attendance widget shows a button with primary shade
-        attendance_selectors = [
-            "gt-attendance-info gt-button[shade='primary']",
-            "gt-attendance-info gt-button",
-            ".attendance-widget gt-button",
-            "gt-button[shade='primary']"
+        # Look for any visible dropdown or select elements
+        all_selects = driver.find_elements(By.CSS_SELECTOR, "select, gt-dropdown, [role='combobox'], [role='listbox']")
+        for select_el in all_selects:
+            if select_el.is_displayed():
+                print(f"📋 Found dropdown element: {select_el.tag_name}")
+                # Try clicking it
+                driver.execute_script("arguments[0].click();", select_el)
+                time.sleep(2)
+                break
+        
+        # Look for Office text anywhere and click it
+        office_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'Office')]")
+        for office_el in office_elements:
+            if office_el.is_displayed():
+                print(f"✅ Found Office text element, clicking...")
+                driver.execute_script("arguments[0].click();", office_el)
+                time.sleep(2)
+                break
+        
+        # Click any primary button
+        primary_buttons = driver.find_elements(By.CSS_SELECTOR, "gt-button[shade='primary'], button[shade='primary'], .btn-primary")
+        for btn in primary_buttons:
+            if btn.is_displayed():
+                btn_text = btn.get_attribute('innerText') or btn.text or 'Button'
+                print(f"🎯 Clicking primary button: '{btn_text}'")
+                driver.execute_script("arguments[0].click();", btn)
+                time.sleep(3)
+                break
+                
+        return True
+        
+    except Exception as e:
+        print(f"⚠️ Selenium fallback failed: {e}")
+        return False
+
+def verify_signin_status(driver):
+    """Verify if sign-in was successful"""
+    print("🔍 Verifying sign-in status...")
+    
+    try:
+        # Check for various success indicators
+        page_source = driver.page_source.lower()
+        
+        # Look for signed-in indicators
+        success_indicators = [
+            "signed in",
+            "attendance marked", 
+            "check in successful",
+            "punch in successful",
+            "already signed in"
         ]
         
-        for selector in attendance_selectors:
-            try:
-                attendance_button = WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-                )
-                if attendance_button.is_displayed():
-                    print(f"✅ Found attendance widget button with selector: {selector}")
-                    driver.execute_script("arguments[0].scrollIntoView(true);", attendance_button)
-                    time.sleep(1)
-                    # Use JavaScript click to bypass any overlays
-                    driver.execute_script("arguments[0].click();", attendance_button)
-                    print("🎯 Clicked attendance sign-in button!")
-                    return True
-            except:
-                continue
-                
-    except Exception as e:
-        print(f"⚠️ Could not find attendance widget button: {e}")
-    
-    # Strategy 2: Click on any button with sign-in related text
-    signin_keywords = ["sign in", "check in", "punch in", "clock in", "mark attendance"]
-    for keyword in signin_keywords:
+        for indicator in success_indicators:
+            if indicator in page_source:
+                print(f"✅ Success indicator found: '{indicator}'")
+                return True
+        
+        # Check if Sign In button is still present (indicates not signed in)
         try:
-            xpath = f"//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{keyword}')]"
-            buttons = driver.find_elements(By.XPATH, xpath)
-            for btn in buttons:
-                if btn.is_displayed() and btn.is_enabled():
-                    print(f"✅ Found button with text: {btn.text}")
-                    driver.execute_script("arguments[0].click();", btn)
+            signin_buttons = driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign In') or contains(text(), 'Check In')]")
+            visible_signin_buttons = [btn for btn in signin_buttons if btn.is_displayed()]
+            
+            if visible_signin_buttons:
+                print("❌ Sign In button still visible - attendance not marked")
+                return False
+            else:
+                print("✅ No Sign In button visible - likely signed in")
+                return True
+                
+        except:
+            print("⚠️ Could not determine button status")
+            
+        # Check attendance widget for status
+        try:
+            attendance_info = driver.find_elements(By.CSS_SELECTOR, "gt-attendance-info")
+            if attendance_info:
+                attendance_text = attendance_info[0].get_attribute('innerText') or attendance_info[0].text
+                print(f"📊 Attendance widget text: {attendance_text}")
+                if any(word in attendance_text.lower() for word in ['signed', 'checked', 'marked']):
                     return True
         except:
-            continue
-    
-    # Strategy 3: Look for gt-button elements (custom components)
-    try:
-        gt_buttons = driver.find_elements(By.CSS_SELECTOR, "gt-button")
-        for btn in gt_buttons:
-            btn_text = btn.get_attribute('innerText') or btn.get_attribute('name') or ''
-            if any(keyword in btn_text.lower() for keyword in ['sign', 'check', 'punch', 'clock', 'attendance']):
-                print(f"✅ Found gt-button: {btn_text}")
-                driver.execute_script("arguments[0].click();", btn)
-                return True
-    except:
-        pass
-    
-    return False
+            pass
+            
+        return False
+        
+    except Exception as e:
+        print(f"⚠️ Error verifying status: {e}")
+        return False
 
 def main():
     url   = os.environ['LOGIN_URL']
@@ -360,39 +377,101 @@ def main():
         print("✅ Successfully logged in!")
         time.sleep(3)
         
-        # Handle location modal if it appears
-        modal_handled = handle_location_modal(driver, loc)
+        # Use JavaScript-based approach for the entire sign-in process
+        js_result = complete_signin_process(driver)
         
-        if modal_handled:
-            print("📍 Location modal handled, waiting for page update...")
-            time.sleep(5)
+        # Also try Selenium fallback if location modal is still present
+        try:
+            modal_still_present = driver.find_elements(By.XPATH, "//*[contains(text(), 'Tell us your work location')]")
+            if modal_still_present and modal_still_present[0].is_displayed():
+                print("🔄 Location modal still present, trying Selenium fallback...")
+                handle_location_modal_selenium_fallback(driver, loc)
+        except:
+            pass
         
-        # Try to find and click sign-in button
-        signin_clicked = find_and_click_signin(driver)
+        # Final verification with proper status check
+        time.sleep(5)
+        is_signed_in = verify_signin_status(driver)
         
-        if signin_clicked:
-            print("⏳ Waiting for sign-in to process...")
-            time.sleep(5)
-            
-            # Handle location modal again if it appears after clicking sign-in
-            handle_location_modal(driver, loc)
-            time.sleep(3)
-        
-        # Final verification
-        current_url = driver.current_url
-        page_source = driver.page_source.lower()
-        
-        print(f"🌐 Final URL: {current_url}")
-        
-        # Check for success indicators
-        if "signed in" in page_source or "attendance marked" in page_source:
-            print("✅ ATTENDANCE SIGN-IN SUCCESSFUL!")
-        elif "tell us your work location" in page_source:
-            print("⚠️ Location selection still pending")
-        elif "sign in" in page_source or "check in" in page_source:
-            print("⚠️ Sign-in button still visible - may need manual intervention")
+        if is_signed_in:
+            print("✅ ATTENDANCE SIGN-IN VERIFIED SUCCESSFUL!")
         else:
-            print("✅ Process completed - please verify status")
+            print("❌ ATTENDANCE SIGN-IN FAILED - Still showing as not signed in")
+            
+            # One more attempt with different approach
+            print("🔄 Making final attempt...")
+            final_attempt_result = driver.execute_script("""
+                // Final aggressive attempt
+                var clicked = false;
+                
+                // Find any button that might be a sign-in button
+                var allButtons = document.querySelectorAll('button, gt-button, [role="button"]');
+                
+                for (var i = 0; i < allButtons.length; i++) {
+                    var btn = allButtons[i];
+                    var text = btn.textContent || btn.innerText || btn.getAttribute('aria-label') || '';
+                    
+                    if (btn.offsetParent !== null && 
+                        (text.toLowerCase().includes('sign') || 
+                         text.toLowerCase().includes('check') ||
+                         text.toLowerCase().includes('punch') ||
+                         text.toLowerCase().includes('mark'))) {
+                        
+                        console.log('Final attempt clicking: ' + text);
+                        btn.click();
+                        clicked = true;
+                        
+                        // If this opens a modal, try to handle it
+                        setTimeout(function() {
+                            // Look for Office option anywhere
+                            var officeElements = document.querySelectorAll('*');
+                            for (var j = 0; j < officeElements.length; j++) {
+                                var el = officeElements[j];
+                                var elText = el.textContent || el.innerText || '';
+                                if (elText === 'Office' && el.offsetParent !== null) {
+                                    el.click();
+                                    console.log('Clicked Office option in final attempt');
+                                    
+                                    // Then click any submit button
+                                    setTimeout(function() {
+                                        var submitButtons = document.querySelectorAll('button, gt-button');
+                                        for (var k = 0; k < submitButtons.length; k++) {
+                                            var submitBtn = submitButtons[k];
+                                            var submitText = submitBtn.textContent || submitBtn.innerText || '';
+                                            if (submitBtn.offsetParent !== null && 
+                                                (submitText.toLowerCase().includes('sign') || 
+                                                 submitText.toLowerCase().includes('submit') ||
+                                                 submitText.toLowerCase().includes('continue'))) {
+                                                submitBtn.click();
+                                                console.log('Clicked final submit button: ' + submitText);
+                                                break;
+                                            }
+                                        }
+                                    }, 1000);
+                                    break;
+                                }
+                            }
+                        }, 2000);
+                        break;
+                    }
+                }
+                
+                return clicked ? 'Final attempt made' : 'No suitable button found';
+            """)
+            
+            time.sleep(8)
+            print(f"🔄 Final attempt result: {final_attempt_result}")
+            
+            # Verify again
+            final_status = verify_signin_status(driver)
+            if final_status:
+                print("✅ FINAL VERIFICATION: SIGN-IN SUCCESSFUL!")
+            else:
+                print("❌ FINAL VERIFICATION: SIGN-IN STILL FAILED")
+        
+        # Get final status info
+        current_url = driver.current_url
+        print(f"🌐 Final URL: {current_url}")
         
         # Save debug files if in debug mode
         if debug or manual_run:
@@ -421,6 +500,36 @@ def main():
 
     finally:
         driver.quit()
+
+def handle_location_modal_selenium_fallback(driver, location):
+    """Selenium fallback for location modal"""
+    print("🔄 Using Selenium fallback for location modal...")
+    
+    try:
+        # Look for Office text anywhere and click it
+        office_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'Office')]")
+        for office_el in office_elements:
+            if office_el.is_displayed():
+                print(f"✅ Found Office text element, clicking...")
+                driver.execute_script("arguments[0].click();", office_el)
+                time.sleep(2)
+                break
+        
+        # Click any primary button
+        primary_buttons = driver.find_elements(By.CSS_SELECTOR, "gt-button[shade='primary'], button[shade='primary'], .btn-primary")
+        for btn in primary_buttons:
+            if btn.is_displayed():
+                btn_text = btn.get_attribute('innerText') or btn.text or 'Button'
+                print(f"🎯 Clicking primary button: '{btn_text}'")
+                driver.execute_script("arguments[0].click();", btn)
+                time.sleep(3)
+                break
+                
+        return True
+        
+    except Exception as e:
+        print(f"⚠️ Selenium fallback failed: {e}")
+        return False
 
 if __name__ == "__main__":
     main()
