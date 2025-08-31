@@ -54,6 +54,23 @@ def main():
     user  = os.environ['LOGIN_ID']
     pwd   = os.environ['LOGIN_PASSWORD']
     loc   = os.environ.get('SIGNIN_LOCATION', '')
+    debug = os.environ.get('DEBUG_MODE', 'false').lower() == 'true'
+    manual_run = os.environ.get('MANUAL_RUN', 'false').lower() == 'true'
+
+    # Time info for debugging
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    ist_hour = (now.hour + 5) % 24 + (30 // 60)  # Convert to IST approximately
+    is_weekend = now.weekday() >= 5  # Saturday = 5, Sunday = 6
+    
+    if debug or manual_run:
+        print(f"🕐 Current time: {now.strftime('%A %H:%M UTC')} (IST: ~{ist_hour:02d}:xx)")
+        print(f"📅 Is weekend: {is_weekend}")
+        print(f"🔧 Manual run: {manual_run}")
+        print(f"🐛 Debug mode: {debug}")
+    
+    if manual_run:
+        print("🧪 Manual testing mode - bypassing time restrictions")
 
     driver = setup_driver()
     try:
@@ -137,34 +154,56 @@ def main():
             print(f"⚠️  Location selection step not found or failed: {e}")
             # This might be normal if location selection isn't required
 
-        # Final verification
+        # Final verification with more detailed checking
         time.sleep(5)
         current_url = driver.current_url
         page_source = driver.page_source.lower()
         print(f"🌐 Final URL: {current_url}")
         
+        # Check for error messages
+        error_messages = [
+            "outside office hours", "sign-in not allowed", "invalid time", 
+            "weekend", "holiday", "not authorized", "access denied"
+        ]
+        
+        if any(error in page_source for error in error_messages):
+            print("⚠️  Time/Date restriction detected in page content")
+        
         # Check for success indicators
         success_indicators = [
-            "dashboard", "home", "employee", "profile", "attendance", "worklife"
+            "dashboard", "home", "employee", "profile", "attendance", "worklife", "good afternoon", "good morning"
         ]
         
         failure_indicators = [
             "login", "signin", "sign-in", "tell us your work location", "not signed in"
         ]
         
-        if any(indicator in current_url.lower() for indicator in success_indicators):
+        if any(indicator in current_url.lower() or indicator in page_source for indicator in success_indicators):
             print("✅ Login successful - reached dashboard!")
         elif any(indicator in page_source for indicator in failure_indicators):
             print("❌ Login incomplete - still on login/location page")
-            # Try to find what's still needed
             if "tell us your work location" in page_source:
                 print("🔍 Location selection still required")
             elif "not signed in" in page_source:
                 print("🔍 Sign-in step still pending")
-        elif "good afternoon" in page_source or "good morning" in page_source or "good evening" in page_source:
-            print("✅ Login successful - greeting detected!")
         else:
-            print("✅ Automation completed - final status unclear")
+            print("✅ Automation completed - checking page content...")
+            if debug:
+                print("📄 Page title:", driver.title)
+                
+        # Save page source for debugging if needed
+        if debug or manual_run or (any(indicator in page_source for indicator in failure_indicators)):
+            try:
+                with open("/tmp/final_page_source.html", "w", encoding='utf-8') as f:
+                    f.write(driver.page_source)
+                print("💾 Page source saved for debugging")
+                
+                # Also save a screenshot if debug mode
+                if debug or manual_run:
+                    driver.save_screenshot("/tmp/final_screenshot.png")
+                    print("📸 Screenshot saved for debugging")
+            except Exception as save_error:
+                print(f"⚠️  Could not save debug files: {save_error}")
 
     except Exception as e:
         print(f"❌ Automation failed: {e}")

@@ -2,8 +2,18 @@ name: GreytHR Auto Sign-In
 
 on:
   schedule:
+    # 3:30 AM UTC = 9:00 AM IST, Monday to Saturday
     - cron: '30 3 * * 1-6'
   workflow_dispatch:
+    inputs:
+      debug_mode:
+        description: 'Enable debug mode for testing'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+        - 'true'
+        - 'false'
 
 jobs:
   greythr-signin:
@@ -29,7 +39,19 @@ jobs:
           LOGIN_ID: ${{ secrets.LOGIN_ID }}
           LOGIN_PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
           SIGNIN_LOCATION: ${{ secrets.SIGNIN_LOCATION }}
+          DEBUG_MODE: ${{ github.event.inputs.debug_mode || 'false' }}
+          MANUAL_RUN: ${{ github.event_name == 'workflow_dispatch' }}
         run: python greythr_automation.py
+
+      - name: Upload debug artifacts (if debug mode)
+        if: always() && github.event.inputs.debug_mode == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-files
+          path: |
+            /tmp/error_screenshot.png
+            /tmp/final_page_source.html
+          retention-days: 1
 
       - if: failure()
         run: echo "❌ GreytHR automation failed! Check Actions logs."
