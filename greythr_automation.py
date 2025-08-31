@@ -27,27 +27,109 @@ def setup_driver():
     driver.set_page_load_timeout(30)
     return driver
 
-def find_button_by_text(driver, text, timeout=10):
-    """Find button by text content using XPath"""
-    xpath_patterns = [
-        f"//button[contains(text(), '{text}')]",
-        f"//button[contains(., '{text}')]",
-        f"//input[@type='submit' and contains(@value, '{text}')]",
-        f"//input[@type='button' and contains(@value, '{text}')]",
-        f"//*[@role='button' and contains(text(), '{text}')]",
-        f"//a[contains(@class, 'btn') and contains(text(), '{text}')]"
+def discover_page_elements(driver):
+    """Discover all clickable elements on the page"""
+    print("\n🔍 DISCOVERING ALL CLICKABLE ELEMENTS...")
+    
+    # Find all buttons
+    buttons = driver.find_elements(By.TAG_NAME, "button")
+    print(f"Found {len(buttons)} button elements:")
+    for i, btn in enumerate(buttons):
+        try:
+            text = btn.text.strip()
+            classes = btn.get_attribute('class') or ''
+            is_clickable = btn.is_enabled() and btn.is_displayed()
+            if text or is_clickable:
+                print(f"  Button {i}: '{text}' | classes: '{classes}' | clickable: {is_clickable}")
+        except:
+            pass
+    
+    # Find all links that might be styled as buttons
+    links = driver.find_elements(By.TAG_NAME, "a")
+    clickable_links = []
+    for link in links:
+        try:
+            text = link.text.strip()
+            classes = link.get_attribute('class') or ''
+            if ('btn' in classes.lower() or 'button' in classes.lower()) and link.is_displayed():
+                clickable_links.append(link)
+                print(f"  Link-button: '{text}' | classes: '{classes}'")
+        except:
+            pass
+    
+    # Find all input buttons
+    inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='button'], input[type='submit']")
+    print(f"Found {len(inputs)} input buttons:")
+    for i, inp in enumerate(inputs):
+        try:
+            value = inp.get_attribute('value') or ''
+            classes = inp.get_attribute('class') or ''
+            is_clickable = inp.is_enabled() and inp.is_displayed()
+            if is_clickable:
+                print(f"  Input {i}: '{value}' | classes: '{classes}' | clickable: {is_clickable}")
+        except:
+            pass
+    
+    # Look for elements with specific attendance-related text
+    attendance_keywords = ['sign in', 'check in', 'punch in', 'attendance', 'clock in', 'mark attendance']
+    print(f"\n🎯 SEARCHING FOR ATTENDANCE-RELATED ELEMENTS...")
+    for keyword in attendance_keywords:
+        elements = driver.find_elements(By.XPATH, f"//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{keyword}')]")
+        if elements:
+            print(f"  Found {len(elements)} elements containing '{keyword}':")
+            for elem in elements:
+                try:
+                    tag = elem.tag_name
+                    text = elem.text.strip()
+                    classes = elem.get_attribute('class') or ''
+                    clickable = elem.is_enabled() and elem.is_displayed()
+                    print(f"    {tag}: '{text}' | clickable: {clickable} | classes: '{classes}'")
+                except:
+                    pass
+
+def smart_signin_attempt(driver):
+    """Try intelligent sign-in based on discovered elements"""
+    print("\n🤖 ATTEMPTING SMART SIGN-IN...")
+    
+    # Strategy 1: Look for buttons with sign-in related text
+    signin_patterns = [
+        "sign in", "sign-in", "signin", "check in", "punch in", "clock in", "mark attendance"
     ]
     
-    for pattern in xpath_patterns:
+    for pattern in signin_patterns:
         try:
-            element = WebDriverWait(driver, timeout).until(
-                EC.element_to_be_clickable((By.XPATH, pattern))
+            # Case-insensitive search for buttons
+            elements = driver.find_elements(By.XPATH, 
+                f"//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{pattern}')]"
             )
-            return element
-        except:
+            
+            for elem in elements:
+                if elem.is_displayed() and elem.is_enabled():
+                    print(f"🎯 Found and clicking: '{elem.text}' (pattern: {pattern})")
+                    driver.execute_script("arguments[0].scrollIntoView(true);", elem)
+                    time.sleep(1)
+                    elem.click()
+                    time.sleep(3)
+                    return True
+        except Exception as e:
+            print(f"Pattern '{pattern}' failed: {e}")
             continue
     
-    raise Exception(f"Could not find clickable button with text '{text}'")
+    # Strategy 2: Click any blue/primary buttons (common for sign-in)
+    try:
+        blue_buttons = driver.find_elements(By.XPATH, 
+            "//button[contains(@class, 'blue') or contains(@class, 'primary') or contains(@class, 'btn-primary')]"
+        )
+        for btn in blue_buttons:
+            if btn.is_displayed() and btn.is_enabled():
+                print(f"🔵 Trying blue/primary button: '{btn.text}'")
+                btn.click()
+                time.sleep(3)
+                return True
+    except:
+        pass
+    
+    return False
 
 def main():
     url   = os.environ['LOGIN_URL']
@@ -70,7 +152,7 @@ def main():
         print(f"🐛 Debug mode: {debug}")
     
     if manual_run:
-        print("🧪 Manual testing mode - bypassing time restrictions")
+        print("🧪 Manual testing mode - will attempt sign-in regardless of time/status")
 
     driver = setup_driver()
     try:
@@ -91,142 +173,105 @@ def main():
         password.send_keys(pwd)
 
         print("🔑 Clicking login button...")
-        login_btn = find_button_by_text(driver, "Login")
+        login_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Login') or contains(text(), 'LOGIN') or contains(@value, 'Login')]")
         login_btn.click()
         time.sleep(5)
 
-        print("🔍 Checking for immediate sign-in requirement...")
-        try:
-            # Check if we need to click Sign In immediately after login
-            sign_in = WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
-            )
-            print("✅ Found immediate Sign In button, clicking...")
-            sign_in.click()
-            time.sleep(3)
-        except Exception as e:
-            print(f"⚠️  No immediate Sign In button found: {e}")
-
-        # Look for attendance sign-in on dashboard
-        print("🕒 Looking for attendance sign-in on dashboard...")
-        try:
-            # Wait a bit for dashboard to load completely
-            time.sleep(3)
+        print("⏳ Waiting for dashboard to load...")
+        WebDriverWait(driver, 15).until(
+            lambda d: "login" not in d.current_url.lower() or "dashboard" in d.current_url.lower() or "home" in d.current_url.lower()
+        )
+        
+        if debug or manual_run:
+            discover_page_elements(driver)
+        
+        # Try smart sign-in
+        signin_success = smart_signin_attempt(driver)
+        
+        if signin_success:
+            print("✅ Smart sign-in attempt completed")
             
-            # Look for attendance sign-in button (the blue button in the date section)
-            attendance_signin_selectors = [
-                "//button[contains(text(), 'Sign In')]",
-                "//button[contains(@class, 'sign') and contains(text(), 'Sign')]",
-                "//*[contains(@class, 'attendance')]//button[contains(text(), 'Sign In')]",
-                "//*[contains(text(), '31 August 2025')]//following::button[contains(text(), 'Sign In')]",
-                "//button[@class and contains(text(), 'Sign In')]"
-            ]
-            
-            attendance_button = None
-            for selector in attendance_signin_selectors:
-                try:
-                    attendance_button = WebDriverWait(driver, 5).until(
-                        EC.element_to_be_clickable((By.XPATH, selector))
-                    )
-                    print(f"📍 Found attendance sign-in button with selector: {selector}")
-                    break
-                except:
-                    continue
-            
-            if attendance_button:
-                print("🕒 Clicking attendance sign-in button...")
-                attendance_button.click()
-                time.sleep(3)
-                
-                # After clicking, check if location selection appears
-                try:
-                    location_dropdown = WebDriverWait(driver, 5).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "select, .dropdown, [role='combobox']"))
-                    )
-                    print("📍 Location selection appeared after attendance sign-in")
-                    
+            # Handle location selection if it appears
+            try:
+                time.sleep(2)
+                location_dropdown = driver.find_element(By.CSS_SELECTOR, "select")
+                if location_dropdown.is_displayed():
+                    print("📍 Location selection found")
                     if loc:
-                        print(f"📍 Selecting location: {loc}")
                         Select(location_dropdown).select_by_visible_text(loc)
+                        print(f"Selected location: {loc}")
                     else:
-                        print("📍 No location specified, selecting first option")
                         Select(location_dropdown).select_by_index(1)
+                        print("Selected first available location")
                     
-                    time.sleep(2)
-                    
-                    # Final sign-in after location selection
-                    final_signin = find_button_by_text(driver, "Sign In")
-                    final_signin.click()
-                    time.sleep(3)
-                    print("✅ Completed location selection and final sign-in")
-                    
-                except Exception as loc_e:
-                    print(f"⚠️  No location selection needed after attendance sign-in: {loc_e}")
-                
-            else:
-                print("⚠️  No attendance sign-in button found on dashboard")
-                
-        except Exception as e:
-            print(f"⚠️  Dashboard attendance sign-in failed: {e}")
-
-        # Final verification with more detailed checking
+                    # Final confirm button
+                    time.sleep(1)
+                    confirm_buttons = driver.find_elements(By.XPATH, "//button[contains(text(), 'Sign In') or contains(text(), 'Confirm')]")
+                    for btn in confirm_buttons:
+                        if btn.is_displayed() and btn.is_enabled():
+                            btn.click()
+                            print("✅ Final confirmation clicked")
+                            break
+            except:
+                print("📍 No location selection required")
+        
+        # Final verification with detailed analysis
         time.sleep(5)
         current_url = driver.current_url
-        page_source = driver.page_source.lower()
+        page_source = driver.page_source
         print(f"🌐 Final URL: {current_url}")
         
-        # Check for error messages
-        error_messages = [
-            "outside office hours", "sign-in not allowed", "invalid time", 
-            "weekend", "holiday", "not authorized", "access denied"
+        # Check page content for clues
+        page_lower = page_source.lower()
+        
+        # Success indicators
+        success_phrases = [
+            "good afternoon", "good morning", "good evening", "welcome",
+            "signed in", "attendance marked", "check-in successful", "punch in successful"
         ]
         
-        if any(error in page_source for error in error_messages):
-            print("⚠️  Time/Date restriction detected in page content")
-        
-        # Check for success indicators
-        success_indicators = [
-            "dashboard", "home", "employee", "profile", "attendance", "worklife", "good afternoon", "good morning"
+        # Still need action indicators  
+        action_needed = [
+            "sign in", "check in", "punch in", "mark attendance", "clock in",
+            "tell us your work location", "select location"
         ]
         
-        failure_indicators = [
-            "login", "signin", "sign-in", "tell us your work location", "not signed in"
-        ]
+        found_success = any(phrase in page_lower for phrase in success_phrases)
+        found_action = any(phrase in page_lower for phrase in action_needed)
         
-        if any(indicator in current_url.lower() or indicator in page_source for indicator in success_indicators):
-            print("✅ Login successful - reached dashboard!")
-        elif any(indicator in page_source for indicator in failure_indicators):
-            print("❌ Login incomplete - still on login/location page")
-            if "tell us your work location" in page_source:
-                print("🔍 Location selection still required")
-            elif "not signed in" in page_source:
-                print("🔍 Sign-in step still pending")
+        if found_success and not found_action:
+            print("✅ ATTENDANCE SIGN-IN SUCCESSFUL!")
+        elif found_action:
+            print("❌ Attendance sign-in still required - automation incomplete")
+            if debug or manual_run:
+                for phrase in action_needed:
+                    if phrase in page_lower:
+                        print(f"   Still needs: {phrase}")
         else:
-            print("✅ Automation completed - checking page content...")
-            if debug:
-                print("📄 Page title:", driver.title)
-                
-        # Save page source for debugging if needed
-        if debug or manual_run or (any(indicator in page_source for indicator in failure_indicators)):
+            print("✅ Automation completed - status unclear but no action prompts detected")
+        
+        # Enhanced debug output
+        if debug or manual_run:
+            print(f"\n📄 Page title: {driver.title}")
+            
+            # Save debug files with better encoding
             try:
                 with open("/tmp/final_page_source.html", "w", encoding='utf-8') as f:
                     f.write(driver.page_source)
-                print("💾 Page source saved for debugging")
-                
-                # Also save a screenshot if debug mode
-                if debug or manual_run:
-                    driver.save_screenshot("/tmp/final_screenshot.png")
-                    print("📸 Screenshot saved for debugging")
+                driver.save_screenshot("/tmp/final_screenshot.png")
+                print("💾 Debug files saved successfully")
             except Exception as save_error:
-                print(f"⚠️  Could not save debug files: {save_error}")
+                print(f"⚠️ Could not save debug files: {save_error}")
 
     except Exception as e:
         print(f"❌ Automation failed: {e}")
         
-        # Take screenshot for debugging (if not headless)
+        # Always try to save error info
         try:
             driver.save_screenshot("/tmp/error_screenshot.png")
-            print("📸 Screenshot saved for debugging")
+            with open("/tmp/error_page_source.html", "w", encoding='utf-8') as f:
+                f.write(driver.page_source)
+            print("📸 Error debugging files saved")
         except:
             pass
             
