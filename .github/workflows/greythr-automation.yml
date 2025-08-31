@@ -2,7 +2,7 @@ name: GreytHR Auto Sign-In
 
 on:
   schedule:
-    - cron: '30 3 * * 1-6'  # 9:00 AM IST = 3:30 AM UTC (Mon–Sat)
+    - cron: '30 3 * * 1-6'
   workflow_dispatch:
 
 jobs:
@@ -10,21 +10,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: Install Chrome & Chromedriver
+      - name: Install Chromium & Chromedriver
         run: |
           sudo apt-get update
-          sudo apt-get install -y google-chrome-stable chromium-chromedriver
+          sudo apt-get install -y chromium-browser chromium-chromedriver
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
       - name: Run GreytHR Automation
         env:
@@ -34,6 +31,5 @@ jobs:
           SIGNIN_LOCATION: ${{ secrets.SIGNIN_LOCATION }}
         run: python greythr_automation.py
 
-      - name: Notify on failure
-        if: failure()
+      - if: failure()
         run: echo "❌ GreytHR automation failed! Check Actions logs."

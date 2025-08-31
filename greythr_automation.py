@@ -1,5 +1,4 @@
-import os
-import time
+import os, time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
@@ -8,7 +7,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 
 def setup_driver():
-    chrome_path = "/usr/bin/google-chrome-stable"
+    chrome_path = "/usr/bin/chromium-browser"
     driver_path = "/usr/bin/chromedriver"
     options = Options()
     options.binary_location = chrome_path
@@ -25,41 +24,31 @@ def setup_driver():
     return driver
 
 def main():
-    url = os.environ['LOGIN_URL']
-    user = os.environ['LOGIN_ID']
-    pwd  = os.environ['LOGIN_PASSWORD']
-    loc  = os.environ.get('SIGNIN_LOCATION', '')
+    url   = os.environ['LOGIN_URL']
+    user  = os.environ['LOGIN_ID']
+    pwd   = os.environ['LOGIN_PASSWORD']
+    loc   = os.environ.get('SIGNIN_LOCATION', '')
 
     driver = setup_driver()
     try:
-        driver.get(url)
-        time.sleep(2)
+        driver.get(url); time.sleep(2)
 
-        # Login ID
         username = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder*='Employee']"))
         )
-        username.clear()
-        username.send_keys(user)
+        username.clear(); username.send_keys(user)
 
-        # Password
         password = driver.find_element(By.CSS_SELECTOR, "input[type='password']")
-        password.clear()
-        password.send_keys(pwd)
+        password.clear(); password.send_keys(pwd)
 
-        # Click Login
         login_btn = driver.find_element(By.CSS_SELECTOR, "button:has-text('Login')")
-        login_btn.click()
-        time.sleep(5)
+        login_btn.click(); time.sleep(5)
 
-        # Click Sign In
         sign_in = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "button:has-text('Sign In')"))
         )
-        sign_in.click()
-        time.sleep(3)
+        sign_in.click(); time.sleep(3)
 
-        # Select location
         if loc:
             dropdown = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "select"))
@@ -67,8 +56,7 @@ def main():
             Select(dropdown).select_by_visible_text(loc)
             time.sleep(1)
             confirm = driver.find_element(By.CSS_SELECTOR, "button:has-text('Sign In')")
-            confirm.click()
-            time.sleep(2)
+            confirm.click(); time.sleep(2)
 
         print("✅ Automation completed successfully!")
 
