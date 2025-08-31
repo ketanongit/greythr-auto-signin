@@ -4,7 +4,7 @@ async function setupBrowser() {
     console.log('🚀 Setting up browser...');
     
     const browser = await puppeteer.launch({
-        headless: true,
+        headless: "new", // Use new headless mode
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -50,9 +50,63 @@ async function loginToGreytHR(page) {
     console.log('🔒 Filling password...');
     await page.type('input[type="password"]', password);
     
-    // Click login button
+    // Click login button using XPath for text matching
     console.log('🔑 Clicking login button...');
-    await page.click('button:has-text("Login"), button:has-text("LOGIN"), input[value*="Login"]');
+    
+    // Try multiple approaches to find login button
+    let loginClicked = false;
+    
+    // Approach 1: Try common button selectors
+    const buttonSelectors = [
+        'button[type="submit"]',
+        'input[type="submit"]',
+        'button.btn-primary',
+        '.login-btn',
+        '#login-button'
+    ];
+    
+    for (const selector of buttonSelectors) {
+        try {
+            await page.click(selector);
+            console.log(`✅ Clicked login button with selector: ${selector}`);
+            loginClicked = true;
+            break;
+        } catch (error) {
+            // Continue to next selector
+        }
+    }
+    
+    // Approach 2: Use XPath for text-based selection
+    if (!loginClicked) {
+        try {
+            const loginButtonXPath = '//button[contains(text(), "Login") or contains(text(), "LOGIN") or contains(@value, "Login")]';
+            await page.waitForXPath(loginButtonXPath, { visible: true });
+            const [loginButton] = await page.$x(loginButtonXPath);
+            if (loginButton) {
+                await loginButton.click();
+                console.log('✅ Clicked login button using XPath');
+                loginClicked = true;
+            }
+        } catch (error) {
+            console.log('⚠️ XPath login button not found');
+        }
+    }
+    
+    // Approach 3: JavaScript execution as fallback
+    if (!loginClicked) {
+        await page.evaluate(() => {
+            const buttons = document.querySelectorAll('button, input[type="submit"]');
+            for (const btn of buttons) {
+                const text = btn.textContent || btn.value || btn.innerText || '';
+                if (text.toLowerCase().includes('login') || btn.type === 'submit') {
+                    btn.click();
+                    console.log('Clicked login button via JavaScript:', text);
+                    return;
+                }
+            }
+        });
+        console.log('✅ Clicked login button using JavaScript fallback');
+    }
     
     // Wait for navigation
     console.log('⏳ Waiting for dashboard...');
@@ -85,28 +139,49 @@ async function handleAttendanceSignIn(page) {
         // Look for Sign In button and click it
         console.log('🔍 Looking for Sign In button...');
         
-        const signInResult = await page.evaluate(() => {
-            // Find Sign In button using multiple strategies
-            const buttons = document.querySelectorAll('button, gt-button, [role="button"]');
-            
-            for (const btn of buttons) {
-                const text = btn.innerText || btn.textContent || '';
-                const isVisible = btn.offsetParent !== null;
-                
-                if (isVisible && text.toLowerCase().includes('sign in')) {
-                    console.log('Found Sign In button:', text);
-                    btn.click();
-                    return { success: true, buttonText: text };
-                }
-            }
-            return { success: false, error: 'No Sign In button found' };
-        });
+        let signInClicked = false;
         
-        if (!signInResult.success) {
-            throw new Error(signInResult.error);
+        // Approach 1: Try XPath for Sign In button
+        try {
+            const signInXPath = '//button[contains(text(), "Sign In") or contains(text(), "Sign in") or contains(text(), "SIGN IN")]';
+            await page.waitForXPath(signInXPath, { visible: true, timeout: 10000 });
+            const [signInButton] = await page.$x(signInXPath);
+            if (signInButton) {
+                await signInButton.click();
+                console.log('✅ Clicked Sign In button using XPath');
+                signInClicked = true;
+            }
+        } catch (error) {
+            console.log('⚠️ XPath Sign In button not found, trying other methods...');
         }
         
-        console.log(`✅ Clicked Sign In button: "${signInResult.buttonText}"`);
+        // Approach 2: JavaScript-based button finding
+        if (!signInClicked) {
+            const signInResult = await page.evaluate(() => {
+                const buttons = document.querySelectorAll('button, gt-button, [role="button"]');
+                
+                for (const btn of buttons) {
+                    const text = btn.innerText || btn.textContent || '';
+                    const isVisible = btn.offsetParent !== null;
+                    
+                    if (isVisible && text.toLowerCase().includes('sign in')) {
+                        console.log('Found Sign In button:', text);
+                        btn.click();
+                        return { success: true, buttonText: text };
+                    }
+                }
+                return { success: false, error: 'No Sign In button found' };
+            });
+            
+            if (signInResult.success) {
+                console.log(`✅ Clicked Sign In button: "${signInResult.buttonText}"`);
+                signInClicked = true;
+            }
+        }
+        
+        if (!signInClicked) {
+            throw new Error('Could not find or click Sign In button');
+        }
         
         // Wait for location modal to appear
         await page.waitForTimeout(3000);
@@ -133,29 +208,31 @@ async function handleAttendanceSignIn(page) {
                 results.push('Found gt-dropdown element');
                 
                 // Try to click the dropdown button
-                const dropdownButton = dropdown.querySelector('button, [role="button"]');
+                const dropdownButton = dropdown.querySelector('button, [role="button"], .dropdown-button');
                 if (dropdownButton) {
                     dropdownButton.click();
                     results.push('Clicked dropdown button');
                     
-                    // Wait a moment for options to appear
+                    // Wait for dropdown to open and then select option
                     setTimeout(() => {
                         // Look for Office option in dropdown body
-                        const dropdownBody = dropdown.querySelector('.dropdown-body, .dropdown-container');
-                        if (dropdownBody) {
-                            const officeOption = Array.from(dropdownBody.querySelectorAll('div, li, [role="option"]'))
-                                .find(el => el.textContent.trim() === 'Office');
-                            
-                            if (officeOption) {
-                                officeOption.click();
+                        const dropdownItems = dropdown.querySelectorAll('.dropdown-item, [class*="item"], div[class*="dropdown"]');
+                        
+                        for (const item of dropdownItems) {
+                            const itemText = item.textContent || item.innerText || '';
+                            if (itemText.trim() === 'Office') {
+                                item.click();
                                 results.push('Selected Office from dropdown');
-                            } else {
-                                // Select first available option
-                                const firstOption = dropdownBody.querySelector('div[class*="item"], li, [role="option"]');
-                                if (firstOption) {
-                                    firstOption.click();
-                                    results.push('Selected first available option');
-                                }
+                                return;
+                            }
+                        }
+                        
+                        // If Office not found, try first visible option
+                        for (const item of dropdownItems) {
+                            if (item.offsetParent !== null) {
+                                item.click();
+                                results.push('Selected first available option: ' + (item.textContent || '').trim());
+                                return;
                             }
                         }
                     }, 1000);
@@ -173,28 +250,44 @@ async function handleAttendanceSignIn(page) {
                         break;
                     }
                 }
-            }, 1500);
-            
-            // Strategy 3: Click any visible Sign In button after location selection
-            setTimeout(() => {
-                const signInButtons = Array.from(document.querySelectorAll('button, gt-button'))
-                    .filter(btn => {
-                        const text = btn.innerText || btn.textContent || '';
-                        const isVisible = btn.offsetParent !== null;
-                        return isVisible && (text.includes('Sign In') || text.includes('Submit'));
-                    });
-                
-                if (signInButtons.length > 0) {
-                    signInButtons[0].click();
-                    results.push('Clicked final Sign In button');
-                }
-            }, 3000);
+            }, 2000);
             
             return { success: true, message: results.join(' | ') };
             
         }, process.env.SIGNIN_LOCATION || 'Office');
         
         console.log(`📋 Location handling: ${locationResult.message}`);
+        
+        // Wait for location selection to complete
+        await page.waitForTimeout(4000);
+        
+        // Click final Sign In button after location selection
+        console.log('🎯 Looking for final Sign In button after location selection...');
+        
+        try {
+            // Try XPath first
+            const finalSignInXPath = '//button[contains(text(), "Sign In") or contains(text(), "Sign in")]';
+            const [finalSignInButton] = await page.$x(finalSignInXPath);
+            if (finalSignInButton) {
+                await finalSignInButton.click();
+                console.log('✅ Clicked final Sign In button using XPath');
+            }
+        } catch (error) {
+            // JavaScript fallback
+            await page.evaluate(() => {
+                const buttons = document.querySelectorAll('button, gt-button');
+                for (const btn of buttons) {
+                    const text = btn.innerText || btn.textContent || '';
+                    const isVisible = btn.offsetParent !== null;
+                    if (isVisible && (text.includes('Sign In') || text.includes('Submit') || text.includes('Confirm'))) {
+                        console.log('Clicking final button:', text);
+                        btn.click();
+                        break;
+                    }
+                }
+            });
+            console.log('✅ Clicked final Sign In button using JavaScript');
+        }
         
         // Wait for sign-in process to complete
         await page.waitForTimeout(5000);
@@ -238,70 +331,7 @@ async function handleAttendanceSignIn(page) {
             return true;
         } else {
             console.log(`❌ ATTENDANCE SIGN-IN FAILED: ${finalStatus.reason}`);
-            
-            // One final attempt
-            console.log('🔄 Making final attempt...');
-            
-            await page.evaluate(() => {
-                // Aggressive final attempt - click any button that might be related
-                const allButtons = document.querySelectorAll('button, gt-button, [role="button"]');
-                
-                for (const btn of allButtons) {
-                    const text = btn.innerText || btn.textContent || '';
-                    const isVisible = btn.offsetParent !== null;
-                    
-                    if (isVisible && (text.includes('Sign') || text.includes('Mark') || text.includes('Check') || text.includes('Punch'))) {
-                        console.log('Final attempt clicking:', text);
-                        btn.click();
-                        
-                        // If this opens a modal, try to handle it
-                        setTimeout(() => {
-                            // Look for Office option
-                            const officeElements = Array.from(document.querySelectorAll('*'))
-                                .filter(el => el.textContent.trim() === 'Office' && el.offsetParent !== null);
-                            
-                            if (officeElements.length > 0) {
-                                officeElements[0].click();
-                                
-                                // Then click final submit
-                                setTimeout(() => {
-                                    const submitButtons = Array.from(document.querySelectorAll('button, gt-button'))
-                                        .filter(btn => {
-                                            const text = btn.innerText || btn.textContent || '';
-                                            const isVisible = btn.offsetParent !== null;
-                                            return isVisible && (text.includes('Sign') || text.includes('Submit'));
-                                        });
-                                    
-                                    if (submitButtons.length > 0) {
-                                        submitButtons[0].click();
-                                    }
-                                }, 1000);
-                            }
-                        }, 2000);
-                        break;
-                    }
-                }
-            });
-            
-            await page.waitForTimeout(6000);
-            
-            // Final verification
-            const ultimateStatus = await page.evaluate(() => {
-                const pageText = document.body.innerText.toLowerCase();
-                return pageText.includes('signed in') || 
-                       pageText.includes('marked') || 
-                       pageText.includes('successful') ||
-                       !Array.from(document.querySelectorAll('*'))
-                           .some(el => (el.innerText || '').toLowerCase().includes('sign in') && el.offsetParent !== null);
-            });
-            
-            if (ultimateStatus) {
-                console.log('✅ FINAL ATTEMPT SUCCESSFUL!');
-                return true;
-            } else {
-                console.log('❌ ALL ATTEMPTS FAILED');
-                return false;
-            }
+            return false;
         }
         
     } catch (error) {
