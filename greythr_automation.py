@@ -5,17 +5,20 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 
 def setup_driver():
+    chrome_path = "/usr/bin/google-chrome-stable"
+    driver_path = "/usr/bin/chromedriver"
     options = Options()
+    options.binary_location = chrome_path
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    service = Service(ChromeDriverManager().install())
+
+    service = Service(executable_path=driver_path)
     driver = webdriver.Chrome(service=service, options=options)
     driver.implicitly_wait(10)
     driver.set_page_load_timeout(30)
@@ -29,23 +32,22 @@ def main():
 
     driver = setup_driver()
     try:
-        # Navigate to GreytHR login
         driver.get(url)
         time.sleep(2)
 
-        # Enter Login ID
+        # Login ID
         username = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder*='Employee']"))
         )
         username.clear()
         username.send_keys(user)
 
-        # Enter Password
+        # Password
         password = driver.find_element(By.CSS_SELECTOR, "input[type='password']")
         password.clear()
         password.send_keys(pwd)
 
-        # Click Login button
+        # Click Login
         login_btn = driver.find_element(By.CSS_SELECTOR, "button:has-text('Login')")
         login_btn.click()
         time.sleep(5)
@@ -57,7 +59,7 @@ def main():
         sign_in.click()
         time.sleep(3)
 
-        # Select Sign‐In Location if provided
+        # Select location
         if loc:
             dropdown = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "select"))
