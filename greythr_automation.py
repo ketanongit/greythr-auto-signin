@@ -39,43 +39,75 @@ def handle_location_modal(driver, location):
         )
         print("📍 Location modal detected!")
         
-        # Handle the dropdown selection first
+        # Handle the dropdown selection
         try:
-            # Look for gt-dropdown element
-            dropdown = driver.find_element(By.CSS_SELECTOR, "gt-dropdown")
-            if dropdown:
-                print("📋 Found location dropdown")
-                # Click on the dropdown to open it
-                driver.execute_script("arguments[0].click();", dropdown)
-                time.sleep(1)
-                
-                # Try to select the first available option or specific location
+            # Look for the select element or dropdown
+            dropdown_selectors = [
+                "select",  # Standard select element
+                "gt-dropdown select",
+                ".gt-dropdown select",
+                "input[placeholder*='Select']"
+            ]
+            
+            dropdown_found = False
+            for selector in dropdown_selectors:
                 try:
-                    # Look for dropdown options
-                    options = driver.find_elements(By.CSS_SELECTOR, "gt-dropdown option, .dropdown-item, [role='option']")
-                    if options:
-                        # Select the location if specified, otherwise first option
-                        selected = False
-                        for option in options:
-                            option_text = option.text.strip()
-                            if location and location.lower() in option_text.lower():
-                                driver.execute_script("arguments[0].click();", option)
-                                print(f"📍 Selected location: {option_text}")
-                                selected = True
-                                break
+                    dropdown = driver.find_element(By.CSS_SELECTOR, selector)
+                    if dropdown:
+                        print(f"📋 Found location dropdown with selector: {selector}")
+                        dropdown_found = True
                         
-                        if not selected and options:
-                            # Select first available option
-                            driver.execute_script("arguments[0].click();", options[0])
-                            print(f"📍 Selected first available location: {options[0].text}")
-                    else:
-                        # Try clicking the dropdown and typing the location
-                        driver.execute_script("arguments[0].value = arguments[1];", dropdown, location if location else "Office")
-                        print(f"📍 Set dropdown value to: {location if location else 'Office'}")
-                except Exception as e:
-                    print(f"⚠️ Could not select from dropdown: {e}")
+                        # Click to open dropdown
+                        driver.execute_script("arguments[0].click();", dropdown)
+                        time.sleep(1)
+                        
+                        # Try to find and click the "Office" option
+                        option_selectors = [
+                            "//option[contains(text(), 'Office')]",
+                            "//div[contains(text(), 'Office')]",
+                            "//li[contains(text(), 'Office')]",
+                            "//*[@role='option'][contains(text(), 'Office')]"
+                        ]
+                        
+                        option_clicked = False
+                        for opt_selector in option_selectors:
+                            try:
+                                office_option = driver.find_element(By.XPATH, opt_selector)
+                                if office_option.is_displayed():
+                                    driver.execute_script("arguments[0].click();", office_option)
+                                    print("📍 Selected 'Office' location")
+                                    option_clicked = True
+                                    break
+                            except:
+                                continue
+                        
+                        # If clicking didn't work, try setting value directly
+                        if not option_clicked:
+                            try:
+                                # For select elements, set value directly
+                                driver.execute_script("""
+                                    var select = arguments[0];
+                                    for(var i = 0; i < select.options.length; i++) {
+                                        if(select.options[i].text.includes('Office')) {
+                                            select.selectedIndex = i;
+                                            select.dispatchEvent(new Event('change', { bubbles: true }));
+                                            break;
+                                        }
+                                    }
+                                """, dropdown)
+                                print("📍 Set dropdown to 'Office' via JavaScript")
+                            except:
+                                print("⚠️ Could not select Office option")
+                        
+                        break
+                except:
+                    continue
+            
+            if not dropdown_found:
+                print("⚠️ No dropdown found with any selector")
+                
         except Exception as e:
-            print(f"⚠️ Could not find location dropdown: {e}")
+            print(f"⚠️ Error handling dropdown: {e}")
         
         # Also try to fill the textarea if present (for reason/comments)
         try:
@@ -87,18 +119,21 @@ def handle_location_modal(driver, location):
             pass
         
         # Look for submit/confirm button in the modal
-        time.sleep(1)
+        time.sleep(2)  # Give time for dropdown selection to register
         try:
             # Try multiple selectors for the submit button
             submit_selectors = [
+                "//button[contains(text(), 'Sign In')]",
+                "//gt-button[contains(text(), 'Sign In')]",
                 "gt-popup-modal gt-button[shade='primary']",
                 "gt-button[shade='primary']",
-                "//gt-button[@shade='primary']",
-                "//button[contains(text(), 'Sign In')]",
+                ".hydrated[shade='primary']",
+                "//button[contains(@class, 'primary')]",
                 "//button[contains(text(), 'Submit')]",
                 "//button[contains(text(), 'Confirm')]"
             ]
             
+            button_clicked = False
             for selector in submit_selectors:
                 try:
                     if selector.startswith("//"):
@@ -106,19 +141,36 @@ def handle_location_modal(driver, location):
                     else:
                         btn = driver.find_element(By.CSS_SELECTOR, selector)
                     
+                    # Check if button is visible and has text
+                    btn_text = btn.text.strip() if hasattr(btn, 'text') else ""
+                    
                     if btn.is_displayed():
-                        print(f"🎯 Found submit button, clicking...")
+                        print(f"🎯 Found button: '{btn_text}', clicking...")
                         driver.execute_script("arguments[0].scrollIntoView(true);", btn)
                         time.sleep(0.5)
-                        driver.execute_script("arguments[0].click();", btn)
-                        print(f"✅ Clicked modal submit button")
+                        
+                        # Try different click methods
+                        try:
+                            driver.execute_script("arguments[0].click();", btn)
+                        except:
+                            btn.click()
+                            
+                        print(f"✅ Clicked button: '{btn_text}'")
+                        button_clicked = True
                         time.sleep(3)
-                        return True
+                        break
                 except:
                     continue
+            
+            if button_clicked:
+                return True
+            else:
+                print("⚠️ Could not find any submit button")
+                return False
                     
         except Exception as e:
-            print(f"⚠️ Could not find modal submit button: {e}")
+            print(f"⚠️ Error clicking submit button: {e}")
+            return False
             
     except TimeoutException:
         print("ℹ️ No location modal detected")
