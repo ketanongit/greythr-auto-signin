@@ -39,94 +39,111 @@ def handle_location_modal(driver, location):
         )
         print("📍 Location modal detected!")
         
-        # Handle the custom gt-dropdown
+        # Use JavaScript-first approach since it's working better
         try:
-            # First, try to find the gt-dropdown element
-            gt_dropdown = driver.find_element(By.CSS_SELECTOR, "gt-dropdown")
-            print("📋 Found gt-dropdown element")
-            
-            # Click on the dropdown button to open it
-            dropdown_button = gt_dropdown.find_element(By.CSS_SELECTOR, "button.dropdown-button")
-            print("🖱️ Found dropdown button, clicking to open...")
-            driver.execute_script("arguments[0].click();", dropdown_button)
-            time.sleep(2)  # Wait for dropdown to open
-            
-            # Now look for the dropdown items container
-            dropdown_container = WebDriverWait(driver, 5).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "gt-dropdown .dropdown-container"))
-            )
-            print("📂 Dropdown container is now visible")
-            
-            # Find all dropdown items
-            dropdown_items = dropdown_container.find_elements(By.CSS_SELECTOR, ".dropdown-item")
-            print(f"📝 Found {len(dropdown_items)} dropdown options")
-            
-            # Look for the "Office" option
-            office_clicked = False
-            for item in dropdown_items:
-                item_text = item.get_attribute('innerText') or item.text or ''
-                item_label = item.find_elements(By.CSS_SELECTOR, ".item-label")
-                if item_label:
-                    item_text = item_label[0].text
+            print("🔄 Using JavaScript to handle dropdown...")
+            result = driver.execute_script("""
+                // Enhanced JavaScript dropdown handler
+                var dropdown = document.querySelector('gt-dropdown');
+                if (!dropdown) {
+                    return 'No gt-dropdown found';
+                }
                 
-                print(f"📋 Checking item: '{item_text}'")
+                console.log('Found gt-dropdown element');
                 
-                if 'office' in item_text.lower():
-                    print(f"✅ Found Office option: '{item_text}', clicking...")
-                    driver.execute_script("arguments[0].click();", item)
-                    office_clicked = True
-                    time.sleep(2)
-                    break
-            
-            if not office_clicked:
-                print("⚠️ Could not find 'Office' option, trying second available option...")
-                if dropdown_items:
-                    second_item = dropdown_items[1]
-                    second_text = second_item.get_attribute('innerText') or second_item.text or 'second Option'
-                    print(f"📋 Clicking second option: '{second_text}'")
-                    driver.execute_script("arguments[0].click();", second_item)
-                    time.sleep(2)
+                // Try multiple button selectors
+                var buttonSelectors = ['button', '.dropdown-button', '[role="button"]'];
+                var button = null;
                 
-        except Exception as dropdown_error:
-            print(f"⚠️ Error handling gt-dropdown: {dropdown_error}")
-            
-            # Fallback: Try to interact with the dropdown using JavaScript
-            try:
-                print("🔄 Trying JavaScript fallback for dropdown...")
-                driver.execute_script("""
-                    // Find the gt-dropdown element
-                    var dropdown = document.querySelector('gt-dropdown');
-                    if (dropdown) {
-                        // Try to open it
-                        var button = dropdown.querySelector('button');
-                        if (button) {
-                            button.click();
-                            
-                            // Wait a bit for options to appear
-                            setTimeout(function() {
-                                // Look for Office option
-                                var items = dropdown.querySelectorAll('.dropdown-item');
-                                for (var i = 0; i < items.length; i++) {
-                                    var text = items[i].textContent || items[i].innerText;
-                                    if (text && text.toLowerCase().includes('office')) {
-                                        items[i].click();
-                                        console.log('Clicked Office option via JS');
-                                        return;
-                                    }
-                                }
-                                // If no Office found, click second item
-                                if (items.length > 0) {
-                                    items[0].click();
-                                    console.log('Clicked second option via JS');
-                                }
-                            }, 1000);
+                for (var i = 0; i < buttonSelectors.length; i++) {
+                    button = dropdown.querySelector(buttonSelectors[i]);
+                    if (button) break;
+                }
+                
+                if (!button) {
+                    return 'No dropdown button found';
+                }
+                
+                console.log('Found dropdown button, clicking...');
+                button.click();
+                
+                // Wait for dropdown to open and try to select option
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        // Look for dropdown items with multiple selectors
+                        var itemSelectors = [
+                            '.dropdown-item',
+                            '.dropdown-option', 
+                            '[role="option"]',
+                            'div[class*="item"]',
+                            'li'
+                        ];
+                        
+                        var items = [];
+                        for (var i = 0; i < itemSelectors.length; i++) {
+                            var found = document.querySelectorAll(itemSelectors[i]);
+                            if (found.length > 0) {
+                                items = Array.from(found);
+                                console.log('Found items with selector: ' + itemSelectors[i]);
+                                break;
+                            }
                         }
-                    }
-                """)
-                time.sleep(3)
-                print("✅ JavaScript dropdown interaction completed")
-            except Exception as js_error:
-                print(f"⚠️ JavaScript fallback also failed: {js_error}")
+                        
+                        if (items.length === 0) {
+                            resolve('No dropdown items found');
+                            return;
+                        }
+                        
+                        console.log('Found ' + items.length + ' dropdown items');
+                        
+                        // Try to find and click Office option
+                        var officeClicked = false;
+                        for (var i = 0; i < items.length; i++) {
+                            var text = items[i].textContent || items[i].innerText || '';
+                            console.log('Checking item: ' + text);
+                            
+                            if (text.toLowerCase().includes('office')) {
+                                items[i].click();
+                                console.log('Clicked Office option: ' + text);
+                                officeClicked = true;
+                                resolve('Office option selected');
+                                return;
+                            }
+                        }
+                        
+                        // If Office not found, click first item
+                        if (!officeClicked && items.length > 0) {
+                            var firstText = items[0].textContent || items[0].innerText || 'First option';
+                            items[0].click();
+                            console.log('Clicked first option: ' + firstText);
+                            resolve('First option selected: ' + firstText);
+                        } else {
+                            resolve('No suitable option found');
+                        }
+                    }, 2000);
+                });
+            """)
+            
+            time.sleep(4)  # Wait for JavaScript promise to resolve
+            print(f"✅ JavaScript dropdown result: {result}")
+                
+        except Exception as js_error:
+            print(f"⚠️ JavaScript dropdown handling failed: {js_error}")
+            
+            # Last resort: Try to find any clickable elements in the modal
+            try:
+                print("🔄 Last resort: looking for any clickable elements...")
+                clickable_elements = driver.find_elements(By.CSS_SELECTOR, "button, div[role='button'], span[role='button'], [onclick], [role='option']")
+                
+                for element in clickable_elements:
+                    element_text = element.get_attribute('innerText') or element.text or ''
+                    if element.is_displayed() and 'office' in element_text.lower():
+                        print(f"🎯 Found clickable Office element: '{element_text}'")
+                        driver.execute_script("arguments[0].click();", element)
+                        time.sleep(2)
+                        break
+            except Exception as last_resort_error:
+                print(f"⚠️ Last resort approach failed: {last_resort_error}")
         
         # Also try to fill the textarea if present (for reason/comments)
         try:
