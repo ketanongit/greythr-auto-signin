@@ -1,4 +1,4 @@
-name: GreytHR Auto Sign-In with Playwright
+name: GreytHR Auto Sign-In
 
 on:
   schedule:
@@ -22,15 +22,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v4
         with:
-          node-version: '18'
+          python-version: '3.11'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install Chromium & Chromedriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser chromium-chromedriver
 
-      - name: Install Playwright browsers
-        run: npx playwright install chromium
+      - run: pip install -r requirements.txt
 
       - name: Run GreytHR Automation
         env:
@@ -40,7 +41,7 @@ jobs:
           SIGNIN_LOCATION: ${{ secrets.SIGNIN_LOCATION }}
           DEBUG_MODE: ${{ github.event.inputs.debug_mode || 'false' }}
           MANUAL_RUN: ${{ github.event_name == 'workflow_dispatch' }}
-        run: node greythr_automation.js
+        run: python greythr_automation.py
 
       - name: Upload debug artifacts (if debug mode)
         if: always() && github.event.inputs.debug_mode == 'true'
@@ -48,9 +49,8 @@ jobs:
         with:
           name: debug-files
           path: |
-            error_screenshot.png
-            final_screenshot.png
-            page_source.html
+            /tmp/error_screenshot.png
+            /tmp/final_page_source.html
           retention-days: 1
 
       - if: failure()
