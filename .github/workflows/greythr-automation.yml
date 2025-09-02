@@ -1,4 +1,4 @@
-name: GreytHR Auto Sign-In
+name: GreytHR Auto Sign-In with Playwright
 
 on:
   schedule:
@@ -28,6 +28,9 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
 
       - name: Run GreytHR Automation
         env:
