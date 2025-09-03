@@ -1,22 +1,16 @@
 const { chromium } = require('playwright');
 const config = require("config");
 const fs = require("fs");
-const path = require("path");
 
 const checkArguments = async () => {
   const args = process.argv;
-  var dir = path.join(__dirname, "config");
+  var dir = __dirname + "/config";
 
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdir(__dirname + "/config", (err) => {
+      if (err) console.log(err);
+    });
   }
-
-  // Handle GitHub Actions environment
-  if (process.env.GITHUB_ACTIONS) {
-    console.log("Running in GitHub Actions environment");
-    return; // Skip command line argument processing
-  }
-
   if (args.includes("--user") && !args.includes("--password")) {
     console.log("Please provide password along with user");
     process.exit();
@@ -34,8 +28,12 @@ const checkArguments = async () => {
         password: args[password + 1],
       };
       fs.writeFileSync(
-        path.join(__dirname, "config", "default.json"),
-        JSON.stringify(credentials)
+        __dirname + "/config/default.json",
+        JSON.stringify(credentials),
+        (err) => {
+          if (err) console.log(err);
+          process.exit();
+        }
       );
       console.log("Your credentials are saved! ");
       console.log('Run "node index.js" to sign in');
@@ -47,28 +45,23 @@ const checkArguments = async () => {
 checkArguments();
 
 const automate = async () => {
-  // Launch browser with GitHub Actions optimized settings
+  // Launch browser with more robust settings
   const browser = await chromium.launch({
-    headless: process.env.GITHUB_ACTIONS ? true : false, // Headless in CI, visual for local
-    slowMo: process.env.GITHUB_ACTIONS ? 100 : 300,
+    headless: false, // Set to true for production
+    slowMo: 300, // Increased delay for better interaction
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-accelerated-2d-canvas',
       '--disable-gpu',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
       '--window-size=1920,1080'
     ]
   });
   
   const context = await browser.newContext({
     viewport: { width: 1920, height: 1080 },
-    userAgent: process.env.GITHUB_ACTIONS 
-      ? 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
   });
   
   const page = await context.newPage();
@@ -77,18 +70,11 @@ const automate = async () => {
   page.on('console', msg => {
     if (msg.type() === 'log') {
       console.log('Browser console:', msg.text());
-    } else if (msg.type() === 'error') {
-      console.log('Error: Browser console [error]:', msg.text());
-    } else if (msg.type() === 'warning') {
-      console.log('Warning: Browser console [warning]:', msg.text());
-    } else {
-      console.log(`Browser console [${msg.type()}]:`, msg.text());
     }
   });
   
-  // Set longer timeout for CI environment
-  const timeout = process.env.GITHUB_ACTIONS ? 90000 : 60000;
-  page.setDefaultTimeout(timeout);
+  // Set longer timeout
+  page.setDefaultTimeout(60000);
   
   var result = "";
   
@@ -96,17 +82,12 @@ const automate = async () => {
     console.log("Navigating to login page...");
     await page.goto("https://kalvium.greythr.com/", { 
       waitUntil: 'domcontentloaded',
-      timeout: timeout 
+      timeout: 60000 
     });
     
     // Wait for page to be interactive
     await page.waitForLoadState('networkidle');
     console.log("Page loaded successfully");
-    
-    // Take initial screenshot for debugging if in debug mode
-    if (process.env.DEBUG_MODE === 'true') {
-      await page.screenshot({ path: "login_page.png" });
-    }
     
     // Wait for and fill username
     console.log("Looking for username field...");
@@ -120,7 +101,7 @@ const automate = async () => {
     await passwordField.fill(config.get("password"));
     console.log("Password entered");
     
-    // Submit form using the proven method
+    // Submit form
     console.log("Submitting login form...");
     await Promise.race([
       page.click('button[type="submit"]'),
@@ -162,17 +143,15 @@ const automate = async () => {
     await page.waitForTimeout(4000);
     console.log("Waiting for modal to appear...");
     
-    // Debug: Save the HTML to see what's on the page (only in debug mode or if error)
-    if (process.env.DEBUG_MODE === 'true') {
-      const htmlContent = await page.content();
-      fs.writeFileSync('modal_page.html', htmlContent);
-      console.log("Saved page HTML to modal_page.html for debugging");
-    }
+    // Debug: Save the HTML to see what's on the page
+    const htmlContent = await page.content();
+    fs.writeFileSync('modal_page.html', htmlContent);
+    console.log("Saved page HTML to modal_page.html for debugging");
     
     // Take screenshot of modal state
     await page.screenshot({ path: "modal_state.png" });
     
-    // Check what's visible on the page using the proven logic
+    // Check what's visible on the page
     const debugInfo = await page.evaluate(() => {
       const info = {
         modals: [],
@@ -235,7 +214,7 @@ const automate = async () => {
     
     console.log("Debug Info:", JSON.stringify(debugInfo, null, 2));
     
-    // If modal is present, handle it using the proven logic
+    // If modal is present, handle it
     if (debugInfo.modalPresent || debugInfo.modals.length > 0) {
       console.log("Modal detected, attempting to handle...");
       
@@ -327,10 +306,6 @@ const automate = async () => {
         
         console.log("DOM manipulation result:", manipResult);
         await page.waitForTimeout(4000);
-        
-        if (manipResult.includes("Attempted DOM manipulation")) {
-          result = "✅ Modal handled with DOM manipulation";
-        }
       }
       
     } else {
@@ -353,7 +328,7 @@ const automate = async () => {
       result = "✅ Successfully signed in - Success message present";
       console.log("SUCCESS: Success message found");
     } else if (!result.includes("✅")) {
-      result = result || "⚠️ Sign in attempted but could not verify success";
+      result = "⚠️ Sign in attempted but could not verify success";
       console.log("WARNING: Could not verify sign in success");
     }
     
@@ -372,34 +347,20 @@ const automate = async () => {
 
 const signIn = async () => {
   const date = new Date();
-  console.log(`Starting GreytHR automation at ${date.toLocaleString()}`);
-  
   let result = await automate();
-  
-  const logEntry = `\n${result} at ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')} on ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
-  
-  fs.appendFileSync("log.txt", logEntry);
-  
+  fs.appendFile(
+    "log.txt",
+    `\n${result} at ${date.getHours()}:${date.getMinutes()} on ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`,
+    (e) => {
+      if (e) {
+        console.log(e);
+      }
+    }
+  );
   console.log("\n" + "=".repeat(50));
   console.log("FINAL RESULT:", result);
   console.log("=".repeat(50));
-  
-  // Set appropriate exit code for GitHub Actions
-  if (result.includes("❌")) {
-    process.exit(1); // Failure
-  } else if (result.includes("⚠️")) {
-    console.log("Warning: Process completed with warnings but did not fail completely");
-    // Don't exit with error for warnings, just log them
-  }
-  // Success cases (✅) will exit with 0 by default
 };
-
-// Check if credentials exist, if not in GitHub Actions
-if (!process.env.GITHUB_ACTIONS && !fs.existsSync(path.join(__dirname, "config", "default.json"))) {
-  console.log("No credentials found. Please run:");
-  console.log("node index.js --user YOUR_USERNAME --password YOUR_PASSWORD");
-  process.exit(1);
-}
 
 // Run sign-in immediately when script is executed
 signIn();
