@@ -2,10 +2,10 @@
   "name": "greythr-auto-signin",
   "version": "1.0.0",
   "description": "Automated GreytHR sign-in using Playwright",
-  "main": "index.js",
+  "main": "greythr_automation.js",
   "scripts": {
-    "start": "node index.js",
-    "test": "node index.js",
+    "start": "node greythr_automation.js",
+    "test": "node greythr_automation.js",
     "setup": "npm install && npx playwright install chromium"
   },
   "keywords": [
