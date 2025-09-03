@@ -1,0 +1,24 @@
+{
+  "name": "greythr-automation",
+  "version": "1.0.0",
+  "description": "Automated sign-in for GreytHR attendance system",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "DEBUG_MODE=true node index.js"
+  },
+  "keywords": [
+    "automation",
+    "greythr",
+    "attendance",
+    "playwright"
+  ],
+  "author": "Ketanongit",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.40.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
