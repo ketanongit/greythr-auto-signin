@@ -1,24 +1,30 @@
 {
-  "name": "greythr-automation",
+  "name": "greythr-auto-signin",
   "version": "1.0.0",
-  "description": "Automated sign-in for GreytHR attendance system",
+  "description": "Automated GreytHR sign-in using Playwright",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "DEBUG_MODE=true node index.js"
+    "test": "node index.js",
+    "setup": "npm install && npx playwright install chromium"
   },
   "keywords": [
-    "automation",
     "greythr",
-    "attendance",
-    "playwright"
+    "automation",
+    "playwright",
+    "attendance"
   ],
-  "author": "Ketanongit",
+  "author": "Ketan",
   "license": "MIT",
   "dependencies": {
-    "playwright": "^1.40.1"
+    "config": "^3.3.9",
+    "playwright": "^1.40.0"
   },
   "engines": {
     "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/greythr-auto-signin.git"
   }
 }

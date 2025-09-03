@@ -9,7 +9,7 @@ on:
       debug_mode:
         description: 'Enable debug mode for testing'
         required: false
-        default: 'true'
+        default: 'false'
         type: choice
         options:
         - 'true'
@@ -18,7 +18,7 @@ on:
 jobs:
   greythr-signin:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -28,20 +28,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
+          # Remove cache since we don't have package-lock.json yet
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm init -y
+          npm install playwright config
 
       - name: Install Playwright browsers
         run: npx playwright install chromium
 
+      - name: Create config directory and credentials
+        run: |
+          mkdir -p config
+          echo '{"username":"${{ secrets.LOGIN_ID }}","password":"${{ secrets.LOGIN_PASSWORD }}"}' > config/default.json
+
       - name: Run GreytHR Automation
         env:
-          GREYTHR_URL: ${{ secrets.GREYTHR_URL }}
-          LOGIN_ID: ${{ secrets.LOGIN_ID }}
-          LOGIN_PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
-          SIGNIN_LOCATION: ${{ secrets.SIGNIN_LOCATION || 'Office' }}
           DEBUG_MODE: ${{ github.event.inputs.debug_mode || 'false' }}
           MANUAL_RUN: ${{ github.event_name == 'workflow_dispatch' }}
         run: node index.js
@@ -52,16 +55,27 @@ jobs:
         with:
           name: debug-screenshots-${{ github.run_number }}
           path: |
-            /tmp/*.png
-            /tmp/*.html
+            *.png
+            *.html
             log.txt
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Notify success
-        if: success()
-        run: echo "✅ GreytHR sign-in completed successfully!"
+      - name: Show log file
+        if: always()
+        run: |
+          if [ -f log.txt ]; then
+            echo "=== Log File Contents ==="
+            cat log.txt
+          else
+            echo "No log file found"
+          fi
 
-      - name: Notify failure
-        if: failure()
-        run: echo "❌ GreytHR sign-in failed! Check the logs and debug artifacts."
+      - name: Notify result
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ GreytHR sign-in completed successfully!"
+          else
+            echo "❌ GreytHR sign-in failed! Check the logs and debug artifacts."
+          fi
