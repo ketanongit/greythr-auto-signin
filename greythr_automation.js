@@ -220,11 +220,11 @@ const automate = async () => {
       
       // Method 1: Try using Playwright's built-in selectors
       try {
-        // Look for dropdown with Office text
-        const dropdownWithOffice = await page.locator('button:has-text("Office")').first();
-        if (await dropdownWithOffice.count() > 0) {
-          console.log("Found dropdown with Office text, clicking...");
-          await dropdownWithOffice.click();
+        // Look for dropdown with Select text
+        const dropdownWithSelect = await page.locator('button:has-text("Select")').first();
+        if (await dropdownWithSelect.count() > 0) {
+          console.log("Found dropdown with Select text, clicking...");
+          await dropdownWithSelect.click();
           await page.waitForTimeout(2000);
           
           // Look for Office option in expanded dropdown
