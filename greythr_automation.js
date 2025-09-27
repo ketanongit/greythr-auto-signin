@@ -209,7 +209,7 @@ const automate = async () => {
       });
       
       // Check if modal text is present
-      const modalTexts = ['Tell us your work location', 'You are not signed in yet', 'Sign-In Location','Office'];
+      const modalTexts = ['Tell us your work location', 'You are not signed in yet', 'Sign-In Location','Office','Select'];
       for (const text of modalTexts) {
         const elements = Array.from(document.querySelectorAll('*')).filter(el => 
           el.textContent.includes(text) && el.offsetParent !== null
