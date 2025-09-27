@@ -45,17 +45,27 @@ const checkArguments = async () => {
 checkArguments();
 
 const automate = async () => {
+  // Check if running in CI/CD environment
+  const isCI = process.env.CI || process.env.GITHUB_ACTIONS || process.env.MANUAL_RUN;
+  
   // Launch browser with more robust settings
   const browser = await chromium.launch({
-    headless: false, // Set to true for production
-    slowMo: 300, // Increased delay for better interaction
+    headless: isCI ? true : false, // Run headless in CI/CD, headed locally for debugging
+    slowMo: isCI ? 0 : 300, // No slow motion in CI for faster execution
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-accelerated-2d-canvas',
       '--disable-gpu',
-      '--window-size=1920,1080'
+      '--window-size=1920,1080',
+      ...(isCI ? [
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding'
+      ] : [])
     ]
   });
   
@@ -79,6 +89,7 @@ const automate = async () => {
   var result = "";
   
   try {
+    console.log(`Running in ${isCI ? 'CI/CD' : 'local'} mode (headless: ${isCI ? 'true' : 'false'})`);
     console.log("Navigating to login page...");
     await page.goto("https://kalvium.greythr.com/", { 
       waitUntil: 'domcontentloaded',
@@ -198,7 +209,7 @@ const automate = async () => {
       });
       
       // Check if modal text is present
-      const modalTexts = ['Tell us your work location', 'You are not signed in yet', 'Sign-In Location'];
+      const modalTexts = ['Tell us your work location', 'You are not signed in yet', 'Sign-In Location','Office'];
       for (const text of modalTexts) {
         const elements = Array.from(document.querySelectorAll('*')).filter(el => 
           el.textContent.includes(text) && el.offsetParent !== null
